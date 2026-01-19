@@ -18,12 +18,16 @@ import {
   Download,
   ArrowRight
 } from 'lucide-react';
+import { convertPdfToImages } from '../utils/pdfConverter';
 
 export const ToolsGrid: React.FC = () => {
   const [activeTool, setActiveTool] = useState<any>(null);
-  const [status, setStatus] = useState<'idle' | 'processing' | 'success'>('idle');
+  const [status, setStatus] = useState<'idle' | 'configuring' | 'processing' | 'success'>('idle');
   const [fileName, setFileName] = useState('');
   const [progress, setProgress] = useState(0);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [outputFormat, setOutputFormat] = useState<'jpg' | 'png' | 'tiff'>('jpg');
+  const [conversionResult, setConversionResult] = useState<Blob | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const tools = [
@@ -56,6 +60,15 @@ export const ToolsGrid: React.FC = () => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       setFileName(file.name);
+      setSelectedFile(file);
+
+      if (activeTool && activeTool.title === "PDF to Image") {
+        setStatus('configuring');
+        // Reset input immediately for re-selection if needed, though usually handled after close
+        e.target.value = '';
+        return;
+      }
+
       setStatus('processing');
       
       // Simulate processing progress
@@ -74,14 +87,49 @@ export const ToolsGrid: React.FC = () => {
     e.target.value = '';
   };
 
+  const handleConvert = async () => {
+    if (!selectedFile) return;
+    setStatus('processing');
+    setProgress(0);
+
+    try {
+      const result = await convertPdfToImages(selectedFile, outputFormat, (p) => {
+        setProgress(p);
+      });
+      setConversionResult(result);
+      setStatus('success');
+    } catch (error) {
+      console.error(error);
+      setStatus('idle');
+      alert('Error converting file');
+    }
+  };
+
   const handleClose = () => {
     setActiveTool(null);
     setStatus('idle');
+    setSelectedFile(null);
+    setConversionResult(null);
+    setOutputFormat('jpg');
   };
 
   const handleDownload = () => {
     if (!activeTool) return;
     
+    if (activeTool.title === "PDF to Image" && conversionResult) {
+       const url = URL.createObjectURL(conversionResult);
+       const link = document.createElement('a');
+       link.href = url;
+       const originalName = fileName.replace(/\.pdf$/i, '');
+       link.download = `${originalName}_images.zip`;
+       document.body.appendChild(link);
+       link.click();
+       document.body.removeChild(link);
+       URL.revokeObjectURL(url);
+       handleClose();
+       return;
+    }
+
     // Create a dummy file for download
     const content = `This is a simulated converted file for: ${fileName}.\nTool Used: ${activeTool.title}\nTimestamp: ${new Date().toISOString()}`;
     const blob = new Blob([content], { type: 'text/plain' });
@@ -89,7 +137,7 @@ export const ToolsGrid: React.FC = () => {
     const link = document.createElement('a');
     link.href = url;
     
-    const originalName = fileName.replace('.pdf', '');
+    const originalName = fileName.replace(/\.pdf$/i, '');
     link.download = `${originalName}${activeTool.ext}`;
     
     document.body.appendChild(link);
@@ -159,6 +207,38 @@ export const ToolsGrid: React.FC = () => {
                      <X className="w-5 h-5" />
                    </button>
                 </div>
+
+                {status === 'configuring' && (
+                  <div className="text-center py-6">
+                    <h4 className="font-semibold text-slate-900 mb-4">Select Output Format</h4>
+
+                    <div className="flex justify-center space-x-4 mb-8">
+                      {['jpg', 'png', 'tiff'].map((fmt) => (
+                        <label key={fmt} className="cursor-pointer">
+                          <input
+                            type="radio"
+                            name="format"
+                            value={fmt}
+                            checked={outputFormat === fmt}
+                            onChange={() => setOutputFormat(fmt as any)}
+                            className="hidden peer"
+                          />
+                          <div className="px-4 py-2 rounded-lg border border-slate-200 peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600 hover:bg-slate-50 transition-colors uppercase text-sm font-medium">
+                            {fmt}
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+
+                    <button
+                      onClick={handleConvert}
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-medium flex items-center justify-center space-x-2 transition-colors"
+                    >
+                      <ArrowRight className="w-5 h-5" />
+                      <span>Convert to {outputFormat.toUpperCase()}</span>
+                    </button>
+                  </div>
+                )}
 
                 {status === 'processing' && (
                   <div className="text-center py-8">
