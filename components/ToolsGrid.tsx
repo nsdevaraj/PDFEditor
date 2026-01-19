@@ -18,12 +18,14 @@ import {
   Download,
   ArrowRight
 } from 'lucide-react';
+import { convertPDFToExcel, convertPDFToPPT } from '../services/conversionService';
 
 export const ToolsGrid: React.FC = () => {
   const [activeTool, setActiveTool] = useState<any>(null);
   const [status, setStatus] = useState<'idle' | 'processing' | 'success'>('idle');
   const [fileName, setFileName] = useState('');
   const [progress, setProgress] = useState(0);
+  const [resultBlob, setResultBlob] = useState<Blob | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const tools = [
@@ -46,29 +48,48 @@ export const ToolsGrid: React.FC = () => {
     setStatus('idle');
     setFileName('');
     setProgress(0);
+    setResultBlob(null);
     // Small timeout to allow state to set before clicking input
     setTimeout(() => {
       fileInputRef.current?.click();
     }, 50);
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       setFileName(file.name);
       setStatus('processing');
-      
-      // Simulate processing progress
-      let p = 0;
-      const interval = setInterval(() => {
-        p += Math.random() * 10;
-        if (p >= 100) {
-          p = 100;
-          clearInterval(interval);
-          setStatus('success');
+      setProgress(10); // Start progress
+
+      try {
+        let blob: Blob | null = null;
+
+        // Simulate progress for visual feedback during async operation
+        const progressInterval = setInterval(() => {
+             setProgress(prev => Math.min(prev + 5, 90));
+        }, 500);
+
+        if (activeTool.title === "PDF to Excel") {
+           blob = await convertPDFToExcel(file);
+        } else if (activeTool.title === "PDF to PPT") {
+           blob = await convertPDFToPPT(file);
+        } else {
+           // Fallback for others (simulated)
+           await new Promise(resolve => setTimeout(resolve, 2000));
+           const content = `Simulated content for ${activeTool.title}\nFile: ${file.name}`;
+           blob = new Blob([content], { type: 'text/plain' });
         }
-        setProgress(Math.min(p, 100));
-      }, 200);
+
+        clearInterval(progressInterval);
+        setResultBlob(blob);
+        setProgress(100);
+        setStatus('success');
+      } catch (error) {
+        console.error("Conversion failed", error);
+        setStatus('idle');
+        alert("Conversion failed. See console for details.");
+      }
     }
     // Reset input
     e.target.value = '';
@@ -77,15 +98,13 @@ export const ToolsGrid: React.FC = () => {
   const handleClose = () => {
     setActiveTool(null);
     setStatus('idle');
+    setResultBlob(null);
   };
 
   const handleDownload = () => {
-    if (!activeTool) return;
+    if (!resultBlob || !activeTool) return;
     
-    // Create a dummy file for download
-    const content = `This is a simulated converted file for: ${fileName}.\nTool Used: ${activeTool.title}\nTimestamp: ${new Date().toISOString()}`;
-    const blob = new Blob([content], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
+    const url = URL.createObjectURL(resultBlob);
     const link = document.createElement('a');
     link.href = url;
     
