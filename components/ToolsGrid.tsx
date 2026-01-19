@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { validatePDFCompliance } from '../services/geminiService';
 import { 
   FileText, 
   Image, 
@@ -25,6 +26,7 @@ export const ToolsGrid: React.FC = () => {
   const [status, setStatus] = useState<'idle' | 'processing' | 'success' | 'waiting_password'>('idle');
   const [fileName, setFileName] = useState('');
   const [progress, setProgress] = useState(0);
+  const [validationResult, setValidationResult] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // New state for Unlock PDF
@@ -45,7 +47,7 @@ export const ToolsGrid: React.FC = () => {
     { title: "Unlock PDF", desc: "Remove security from PDF files", icon: Unlock, color: "text-teal-600", bg: "bg-teal-100", ext: "_unlocked.pdf" },
     { title: "Redact", desc: "Permanently remove sensitive info", icon: Eraser, color: "text-gray-600", bg: "bg-gray-100", ext: "_redacted.pdf" },
     { title: "OCR", desc: "Make scanned documents searchable", icon: Eye, color: "text-yellow-600", bg: "bg-yellow-100", ext: "_ocr.pdf" },
-    { title: "Validate PDF/A", desc: "Check compliance with ISO standards", icon: FileCheck, color: "text-emerald-600", bg: "bg-emerald-100", ext: "_report.pdf" },
+    { title: "Validate PDF/A", desc: "Check compliance with ISO standards", icon: FileCheck, color: "text-emerald-600", bg: "bg-emerald-100", ext: "_report.txt" },
   ];
 
   const handleToolClick = (tool: any) => {
@@ -71,6 +73,37 @@ export const ToolsGrid: React.FC = () => {
       const file = e.target.files[0];
       setFileName(file.name);
       setStatus('processing');
+      setValidationResult(null);
+      
+      if (activeTool && activeTool.title === "Validate PDF/A") {
+        try {
+          const reader = new FileReader();
+          reader.onload = async (event) => {
+            if (event.target && event.target.result) {
+              const base64Data = (event.target.result as string).split(',')[1];
+              const report = await validatePDFCompliance(base64Data, file.type);
+              setValidationResult(report);
+              setStatus('success');
+              setProgress(100);
+            }
+          };
+          reader.readAsDataURL(file);
+        } catch (err) {
+          console.error(err);
+          setStatus('idle');
+        }
+        return;
+      }
+
+      // Simulate processing progress
+      let p = 0;
+      const interval = setInterval(() => {
+        p += Math.random() * 10;
+        if (p >= 100) {
+          p = 100;
+          clearInterval(interval);
+          setStatus('success');
+        }
       setErrorMessage('');
 
       if (activeTool.title === "Unlock PDF") {
@@ -147,6 +180,14 @@ export const ToolsGrid: React.FC = () => {
   const handleDownload = () => {
     if (!activeTool) return;
     
+    // Create a dummy file for download
+    let content = "";
+    if (activeTool.title === "Validate PDF/A" && validationResult) {
+      content = validationResult;
+    } else {
+      content = `This is a simulated converted file for: ${fileName}.\nTool Used: ${activeTool.title}\nTimestamp: ${new Date().toISOString()}`;
+    }
+
     if (downloadUrl) {
         const link = document.createElement('a');
         link.href = downloadUrl;
