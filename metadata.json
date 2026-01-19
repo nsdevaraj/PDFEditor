@@ -1,0 +1,5 @@
+{
+  "name": "PDF Editor",
+  "description": "A next-generation PDF editor powered by Gemini 2.5. Edit, sign, convert, and chat with your documents securely.",
+  "requestFramePermissions": []
+}
