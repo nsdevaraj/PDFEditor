@@ -18,12 +18,14 @@ import {
   Download,
   ArrowRight
 } from 'lucide-react';
+import { compressPDF } from '../services/pdfService';
 
 export const ToolsGrid: React.FC = () => {
   const [activeTool, setActiveTool] = useState<any>(null);
   const [status, setStatus] = useState<'idle' | 'processing' | 'success'>('idle');
   const [fileName, setFileName] = useState('');
   const [progress, setProgress] = useState(0);
+  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const tools = [
@@ -52,29 +54,46 @@ export const ToolsGrid: React.FC = () => {
     }, 50);
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       setFileName(file.name);
       setStatus('processing');
       
-      // Simulate processing progress
-      let p = 0;
-      const interval = setInterval(() => {
-        p += Math.random() * 10;
-        if (p >= 100) {
-          p = 100;
-          clearInterval(interval);
-          setStatus('success');
-        }
-        setProgress(Math.min(p, 100));
-      }, 200);
+      if (activeTool?.title === "Compress PDF") {
+         try {
+             const blob = await compressPDF(file, (p) => setProgress(p));
+             const url = URL.createObjectURL(blob);
+             setDownloadUrl(url);
+             setStatus('success');
+         } catch (error) {
+             console.error("Compression failed:", error);
+             setStatus('idle');
+             alert("Compression failed. Please try again.");
+         }
+      } else {
+        // Simulate processing progress
+        let p = 0;
+        const interval = setInterval(() => {
+            p += Math.random() * 10;
+            if (p >= 100) {
+            p = 100;
+            clearInterval(interval);
+            setStatus('success');
+            }
+            setProgress(Math.min(p, 100));
+        }, 200);
+      }
     }
     // Reset input
     e.target.value = '';
   };
 
   const handleClose = () => {
+    if (downloadUrl) {
+        URL.revokeObjectURL(downloadUrl);
+        setDownloadUrl(null);
+    }
     setActiveTool(null);
     setStatus('idle');
   };
@@ -82,10 +101,17 @@ export const ToolsGrid: React.FC = () => {
   const handleDownload = () => {
     if (!activeTool) return;
     
-    // Create a dummy file for download
-    const content = `This is a simulated converted file for: ${fileName}.\nTool Used: ${activeTool.title}\nTimestamp: ${new Date().toISOString()}`;
-    const blob = new Blob([content], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
+    let url = downloadUrl;
+    let isTempUrl = false;
+
+    if (!url) {
+        // Create a dummy file for download
+        const content = `This is a simulated converted file for: ${fileName}.\nTool Used: ${activeTool.title}\nTimestamp: ${new Date().toISOString()}`;
+        const blob = new Blob([content], { type: 'text/plain' });
+        url = URL.createObjectURL(blob);
+        isTempUrl = true;
+    }
+
     const link = document.createElement('a');
     link.href = url;
     
@@ -95,7 +121,10 @@ export const ToolsGrid: React.FC = () => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+
+    if (isTempUrl) {
+        URL.revokeObjectURL(url);
+    }
     
     handleClose();
   };
