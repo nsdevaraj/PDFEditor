@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { PDFDocument } from 'pdf-lib';
 import { 
   FileText, 
   Image, 
@@ -21,9 +22,12 @@ import {
 
 export const ToolsGrid: React.FC = () => {
   const [activeTool, setActiveTool] = useState<any>(null);
-  const [status, setStatus] = useState<'idle' | 'processing' | 'success'>('idle');
+  const [status, setStatus] = useState<'idle' | 'processing' | 'success' | 'password'>('idle');
   const [fileName, setFileName] = useState('');
   const [progress, setProgress] = useState(0);
+  const [password, setPassword] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [processedFile, setProcessedFile] = useState<Blob | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const tools = [
@@ -56,35 +60,86 @@ export const ToolsGrid: React.FC = () => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       setFileName(file.name);
-      setStatus('processing');
-      
-      // Simulate processing progress
-      let p = 0;
-      const interval = setInterval(() => {
-        p += Math.random() * 10;
-        if (p >= 100) {
-          p = 100;
-          clearInterval(interval);
-          setStatus('success');
-        }
-        setProgress(Math.min(p, 100));
-      }, 200);
+
+      if (activeTool.title === 'Protect PDF') {
+        setSelectedFile(file);
+        setStatus('password');
+      } else {
+        setStatus('processing');
+
+        // Simulate processing progress
+        let p = 0;
+        const interval = setInterval(() => {
+          p += Math.random() * 10;
+          if (p >= 100) {
+            p = 100;
+            clearInterval(interval);
+            setStatus('success');
+          }
+          setProgress(Math.min(p, 100));
+        }, 200);
+      }
     }
     // Reset input
     e.target.value = '';
   };
 
+  const handleEncrypt = async () => {
+    if (!selectedFile || !password) return;
+    setStatus('processing');
+    setProgress(10);
+
+    try {
+      const arrayBuffer = await selectedFile.arrayBuffer();
+      const pdfDoc = await PDFDocument.load(arrayBuffer);
+      pdfDoc.encrypt({
+        userPassword: password,
+        ownerPassword: password,
+        permissions: {
+          printing: 'highResolution',
+          modifying: false,
+          copying: false,
+          annotating: false,
+          fillingForms: false,
+          contentAccessibility: false,
+          documentAssembly: false,
+        },
+      });
+      const pdfBytes = await pdfDoc.save();
+      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+      setProcessedFile(blob);
+      setProgress(100);
+      setStatus('success');
+    } catch (error) {
+      console.error('Encryption failed:', error);
+      alert('Encryption failed. Please try again.');
+      setStatus('idle');
+    }
+  };
+
   const handleClose = () => {
     setActiveTool(null);
     setStatus('idle');
+    setPassword('');
+    setSelectedFile(null);
+    setProcessedFile(null);
+    setFileName('');
+    setProgress(0);
   };
 
   const handleDownload = () => {
     if (!activeTool) return;
     
-    // Create a dummy file for download
-    const content = `This is a simulated converted file for: ${fileName}.\nTool Used: ${activeTool.title}\nTimestamp: ${new Date().toISOString()}`;
-    const blob = new Blob([content], { type: 'text/plain' });
+    let blob: Blob;
+
+    if (processedFile) {
+      blob = processedFile;
+    } else {
+      // Create a dummy file for download
+      const content = `This is a simulated converted file for: ${fileName}.\nTool Used: ${activeTool.title}\nTimestamp: ${new Date().toISOString()}`;
+      blob = new Blob([content], { type: 'text/plain' });
+    }
+
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -159,6 +214,35 @@ export const ToolsGrid: React.FC = () => {
                      <X className="w-5 h-5" />
                    </button>
                 </div>
+
+                {status === 'password' && (
+                  <div className="text-center py-6">
+                    <div className="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Lock className="w-8 h-8 text-indigo-600" />
+                    </div>
+                    <h4 className="text-xl font-bold text-slate-900 mb-2">Protect PDF</h4>
+                    <p className="text-slate-500 mb-6">Enter a password to encrypt your file</p>
+
+                    <div className="mb-6">
+                      <input
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="Enter password"
+                        className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                        autoFocus
+                      />
+                    </div>
+
+                    <button
+                      onClick={handleEncrypt}
+                      disabled={!password}
+                      className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white py-3 rounded-xl font-medium transition-colors"
+                    >
+                      Encrypt PDF
+                    </button>
+                  </div>
+                )}
 
                 {status === 'processing' && (
                   <div className="text-center py-8">
