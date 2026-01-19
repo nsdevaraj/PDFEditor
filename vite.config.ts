@@ -18,6 +18,19 @@ export default defineConfig(({ mode }) => {
         alias: {
           '@': path.resolve(__dirname, '.'),
         }
+      },
+      esbuild: {
+        supported: {
+          'top-level-await': true
+        },
+      },
+      optimizeDeps: {
+        esbuildOptions: {
+            target: 'esnext'
+        }
+      },
+      build: {
+        target: 'esnext'
       }
     };
 });
