@@ -19,6 +19,8 @@ import {
   Download,
   ArrowRight
 } from 'lucide-react';
+import { convertPDFToExcel, convertPDFToPPT } from '../services/conversionService';
+import { PDFDocument } from 'pdf-lib';
 import { UploadedFile } from '../types';
 import { SplitPDF } from './SplitPDF';
 import { convertPdfToImages } from '../utils/pdfConverter';
@@ -30,6 +32,7 @@ export const ToolsGrid: React.FC = () => {
   const [status, setStatus] = useState<'idle' | 'configuring' | 'processing' | 'success' | 'waiting_password'>('idle');
   const [fileName, setFileName] = useState('');
   const [progress, setProgress] = useState(0);
+  const [resultBlob, setResultBlob] = useState<Blob | null>(null);
   const [currentFile, setCurrentFile] = useState<UploadedFile | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [processedFileUrl, setProcessedFileUrl] = useState<string | null>(null);
@@ -64,6 +67,7 @@ export const ToolsGrid: React.FC = () => {
     setStatus('idle');
     setFileName('');
     setProgress(0);
+    setResultBlob(null);
     setProcessedFileUrl(null);
     setErrorMessage('');
     setPassword('');
@@ -113,6 +117,35 @@ export const ToolsGrid: React.FC = () => {
       }
 
       setStatus('processing');
+      setProgress(10); // Start progress
+
+      try {
+        let blob: Blob | null = null;
+
+        // Simulate progress for visual feedback during async operation
+        const progressInterval = setInterval(() => {
+             setProgress(prev => Math.min(prev + 5, 90));
+        }, 500);
+
+        if (activeTool.title === "PDF to Excel") {
+           blob = await convertPDFToExcel(file);
+        } else if (activeTool.title === "PDF to PPT") {
+           blob = await convertPDFToPPT(file);
+        } else {
+           // Fallback for others (simulated)
+           await new Promise(resolve => setTimeout(resolve, 2000));
+           const content = `Simulated content for ${activeTool.title}\nFile: ${file.name}`;
+           blob = new Blob([content], { type: 'text/plain' });
+        }
+
+        clearInterval(progressInterval);
+        setResultBlob(blob);
+        setProgress(100);
+        setStatus('success');
+      } catch (error) {
+        console.error("Conversion failed", error);
+        setStatus('idle');
+        alert("Conversion failed. See console for details.");
       setValidationResult(null);
       
       if (activeTool.title === 'OCR') {
@@ -240,6 +273,7 @@ export const ToolsGrid: React.FC = () => {
   const handleClose = () => {
     setActiveTool(null);
     setStatus('idle');
+    setResultBlob(null);
     setCurrentFile(null);
     setSelectedFile(null);
     setConversionResult(null);
@@ -254,8 +288,9 @@ export const ToolsGrid: React.FC = () => {
   };
 
   const handleDownload = () => {
-    if (!activeTool) return;
+    if (!resultBlob || !activeTool) return;
     
+    const url = URL.createObjectURL(resultBlob);
     if (activeTool.title === "PDF to Image" && conversionResult) {
        const url = URL.createObjectURL(conversionResult);
        const link = document.createElement('a');
