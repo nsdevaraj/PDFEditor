@@ -35,6 +35,23 @@ export default defineConfig(({ mode }) => {
         alias: {
           '@': path.resolve(__dirname, '.'),
         }
+      },
+      build: {
+        target: 'esnext'
+      },
+      esbuild: {
+        supported: {
+          'top-level-await': true
+        },
+      },
+      
+      optimizeDeps: {
+        esbuildOptions: {
+          target: 'esnext'
+        }
+      },
+      build: {
+        target: 'esnext'
       }
     };
 });
