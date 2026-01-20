@@ -19,6 +19,12 @@ export default defineConfig(({ mode }) => {
           '@': path.resolve(__dirname, '.'),
         }
       },
+      esbuild: {
+        supported: {
+          'top-level-await': true
+        },
+      },
+      
       optimizeDeps: {
         esbuildOptions: {
           target: 'esnext'
@@ -26,6 +32,6 @@ export default defineConfig(({ mode }) => {
       },
       build: {
         target: 'esnext'
-      },
+      }
     };
 });
