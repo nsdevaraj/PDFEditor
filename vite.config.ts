@@ -24,9 +24,10 @@ export default defineConfig(({ mode }) => {
           'top-level-await': true
         },
       },
+      
       optimizeDeps: {
         esbuildOptions: {
-            target: 'esnext'
+          target: 'esnext'
         }
       },
       build: {

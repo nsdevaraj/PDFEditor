@@ -18,7 +18,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Move,
-  Trash2
+  Trash2,
+  EyeOff
 } from 'lucide-react';
 import { chatWithDocument } from '../services/geminiService';
 import * as pdfjsLib from 'pdfjs-dist';
@@ -35,7 +36,7 @@ type ToolType = 'none' | 'eraser';
 
 interface EditorElement {
   id: string;
-  type: 'text' | 'signature' | 'highlight';
+  type: 'text' | 'signature' | 'highlight' | 'redact';
   x: number;
   y: number;
   content?: string;
@@ -152,7 +153,7 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
 
   // --- Tool & Drag Logic ---
 
-  const addElementCentered = (type: 'text' | 'signature' | 'highlight') => {
+  const addElementCentered = (type: 'text' | 'signature' | 'highlight' | 'redact') => {
       if (!canvasRef.current) return;
       
       // Calculate center in PDF coordinates (unscaled)
@@ -166,8 +167,8 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
           y: (viewportHeight / 2) - 20,
           page: currentPage,
           content: type === 'text' ? 'Type here...' : type === 'signature' ? 'Alex. L' : undefined,
-          width: type === 'highlight' ? 200 : undefined,
-          height: type === 'highlight' ? 30 : undefined,
+          width: (type === 'highlight' || type === 'redact') ? 200 : undefined,
+          height: (type === 'highlight' || type === 'redact') ? 30 : undefined,
       };
       
       setElements(prev => [...prev, newElement]);
@@ -346,6 +347,13 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
                 >
                     <Highlighter className="w-5 h-5" />
                 </button>
+                <button
+                    onClick={() => addElementCentered('redact')}
+                    className="p-2 text-slate-500 hover:text-slate-900 hover:bg-slate-200 rounded-lg transition-colors"
+                    title="Redact (Permanently hide content)"
+                >
+                    <EyeOff className="w-5 h-5" />
+                </button>
                 <button 
                     onClick={() => setActiveTool(activeTool === 'eraser' ? 'none' : 'eraser')}
                     className={`p-2 rounded-lg transition-colors ${activeTool === 'eraser' ? 'bg-red-100 text-red-600' : 'text-slate-500 hover:bg-slate-100'}`}
@@ -413,6 +421,28 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
                                         <button 
                                             onClick={(e) => { e.stopPropagation(); setElements(elements.filter(e => e.id !== el.id)) }}
                                             className="p-1 bg-red-500 text-white rounded-full shadow hover:bg-red-600"
+                                        >
+                                            <X className="w-3 h-3" />
+                                        </button>
+                                   </div>
+                               )}
+                           </div>
+                       )}
+
+                       {el.type === 'redact' && (
+                           <div className="relative group">
+                                <div
+                                        className="bg-black"
+                                        style={{
+                                            width: el.width,
+                                            height: el.height
+                                        }}
+                                />
+                                {activeTool !== 'eraser' && (
+                                   <div className="absolute -top-2 -right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); setElements(elements.filter(e => e.id !== el.id)) }}
+                                            className="p-1 bg-slate-500 text-white rounded-full shadow hover:bg-slate-600"
                                         >
                                             <X className="w-3 h-3" />
                                         </button>
