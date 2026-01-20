@@ -19,6 +19,8 @@ import {
   Download,
   ArrowRight
 } from 'lucide-react';
+import { UploadedFile } from '../types';
+import { SplitPDF } from './SplitPDF';
 import { convertPdfToImages } from '../utils/pdfConverter';
 
 import { performOCR } from '../services/ocrService';
@@ -28,6 +30,7 @@ export const ToolsGrid: React.FC = () => {
   const [status, setStatus] = useState<'idle' | 'configuring' | 'processing' | 'success' | 'waiting_password'>('idle');
   const [fileName, setFileName] = useState('');
   const [progress, setProgress] = useState(0);
+  const [currentFile, setCurrentFile] = useState<UploadedFile | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [processedFileUrl, setProcessedFileUrl] = useState<string | null>(null);
   const [validationResult, setValidationResult] = useState<string | null>(null);
@@ -79,6 +82,27 @@ export const ToolsGrid: React.FC = () => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       setFileName(file.name);
+
+      if (activeTool?.title === "Split PDF") {
+        const fileUrl = URL.createObjectURL(file);
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          if (event.target?.result) {
+            const fullBase64 = event.target.result as string;
+            const content = fullBase64.split(',')[1];
+            setCurrentFile({
+              name: file.name,
+              type: file.type,
+              size: file.size,
+              dataUrl: fullBase64,
+              content: content,
+              lastModified: file.lastModified,
+              fileUrl: fileUrl
+            });
+          }
+        };
+        reader.readAsDataURL(file);
+        // Reset input immediately so we can select same file again if needed
       setSelectedFile(file);
 
       if (activeTool && activeTool.title === "PDF to Image") {
@@ -216,6 +240,7 @@ export const ToolsGrid: React.FC = () => {
   const handleClose = () => {
     setActiveTool(null);
     setStatus('idle');
+    setCurrentFile(null);
     setSelectedFile(null);
     setConversionResult(null);
     setOutputFormat('jpg');
@@ -301,6 +326,10 @@ export const ToolsGrid: React.FC = () => {
     
     handleClose();
   };
+
+  if (activeTool?.title === "Split PDF" && currentFile) {
+    return <SplitPDF file={currentFile} onClose={handleClose} />;
+  }
 
   return (
     <div className="flex-1 bg-slate-50 p-8 h-screen overflow-y-auto relative">
