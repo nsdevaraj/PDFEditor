@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { PDFDocument } from 'pdf-lib';
+import { validatePDFCompliance } from '../services/geminiService';
 import { 
   FileText, 
   Image, 
@@ -19,16 +20,24 @@ import {
   Download,
   ArrowRight
 } from 'lucide-react';
+import { performOCR } from '../services/ocrService';
+import { PDFDocument } from 'pdf-lib';
 
 export const ToolsGrid: React.FC = () => {
   const [activeTool, setActiveTool] = useState<any>(null);
-  const [status, setStatus] = useState<'idle' | 'processing' | 'success' | 'password'>('idle');
+  const [status, setStatus] = useState<'idle' | 'processing' | 'success' | 'password' | 'waiting_password'>('idle');
   const [fileName, setFileName] = useState('');
   const [progress, setProgress] = useState(0);
   const [password, setPassword] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [processedFile, setProcessedFile] = useState<Blob | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // New state for Unlock PDF
+  const [password, setPassword] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
+  const [fileBuffer, setFileBuffer] = useState<ArrayBuffer | null>(null);
+  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
 
   const tools = [
     { title: "PDF to Word", desc: "Convert PDF files to Microsoft Word", icon: FileText, color: "text-blue-600", bg: "bg-blue-100", ext: ".docx" },
@@ -42,7 +51,7 @@ export const ToolsGrid: React.FC = () => {
     { title: "Unlock PDF", desc: "Remove security from PDF files", icon: Unlock, color: "text-teal-600", bg: "bg-teal-100", ext: "_unlocked.pdf" },
     { title: "Redact", desc: "Permanently remove sensitive info", icon: Eraser, color: "text-gray-600", bg: "bg-gray-100", ext: "_redacted.pdf" },
     { title: "OCR", desc: "Make scanned documents searchable", icon: Eye, color: "text-yellow-600", bg: "bg-yellow-100", ext: "_ocr.pdf" },
-    { title: "Validate PDF/A", desc: "Check compliance with ISO standards", icon: FileCheck, color: "text-emerald-600", bg: "bg-emerald-100", ext: "_report.pdf" },
+    { title: "Validate PDF/A", desc: "Check compliance with ISO standards", icon: FileCheck, color: "text-emerald-600", bg: "bg-emerald-100", ext: "_report.txt" },
   ];
 
   const handleToolClick = (tool: any) => {
@@ -50,13 +59,21 @@ export const ToolsGrid: React.FC = () => {
     setStatus('idle');
     setFileName('');
     setProgress(0);
+    setProcessedFileUrl(null);
+    setErrorMessage('');
+    setPassword('');
+    setFileBuffer(null);
+    if (downloadUrl) {
+      URL.revokeObjectURL(downloadUrl);
+      setDownloadUrl(null);
+    }
     // Small timeout to allow state to set before clicking input
     setTimeout(() => {
       fileInputRef.current?.click();
     }, 50);
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       setFileName(file.name);
@@ -64,10 +81,82 @@ export const ToolsGrid: React.FC = () => {
       if (activeTool.title === 'Protect PDF') {
         setSelectedFile(file);
         setStatus('password');
-      } else {
-        setStatus('processing');
+      } else { 
 
         // Simulate processing progress
+      setStatus('processing');
+      setValidationResult(null);
+      
+      if (activeTool.title === 'OCR') {
+        try {
+          const blob = await performOCR(file, (p) => setProgress(p));
+          const url = URL.createObjectURL(blob);
+          setProcessedFileUrl(url);    
+        } catch (err) {
+          console.error(err);
+          setStatus('idle');
+        }
+        return;
+      }
+      if (activeTool && activeTool.title === "Validate PDF/A") {
+        try {
+          const reader = new FileReader();
+          reader.onload = async (event) => {
+            if (event.target && event.target.result) {
+              const base64Data = (event.target.result as string).split(',')[1];
+              const report = await validatePDFCompliance(base64Data, file.type);
+              setValidationResult(report);
+              setStatus('success');
+              setProgress(100);
+            }
+          };
+          reader.readAsDataURL(file);
+        } catch (err) {
+          console.error(err);
+          setStatus('idle');
+        }
+        return;
+      }
+
+      // Simulate processing progress
+      let p = 0;
+      const interval = setInterval(() => {
+        p += Math.random() * 10;
+        if (p >= 100) {
+          p = 100;
+          clearInterval(interval);
+          setStatus('success');
+        } catch (error) {
+          console.error(error);
+          setStatus('idle'); // Or error state
+          alert('OCR Failed. Please try again.');
+        }
+      setErrorMessage('');
+
+      if (activeTool.title === "Unlock PDF") {
+        try {
+          const buffer = await file.arrayBuffer();
+          try {
+            // Attempt to load without password first (in case it's just owner password or no password)
+            const pdfDoc = await PDFDocument.load(buffer);
+            // If loaded, save it (this removes encryption if it was just owner password)
+            const savedBytes = await pdfDoc.save();
+            const blob = new Blob([savedBytes], { type: 'application/pdf' });
+            const url = URL.createObjectURL(blob);
+            setDownloadUrl(url);
+            setStatus('success');
+            setProgress(100);
+          } catch (error) {
+            // Failed to load, likely due to password
+            setFileBuffer(buffer);
+            setStatus('waiting_password');
+          }
+        } catch (err) {
+            setErrorMessage('Failed to read file.');
+            setStatus('idle');
+        }
+      } else {
+        // Simulate processing progress for other tools
         let p = 0;
         const interval = setInterval(() => {
           p += Math.random() * 10;
@@ -114,6 +203,25 @@ export const ToolsGrid: React.FC = () => {
       console.error('Encryption failed:', error);
       alert('Encryption failed. Please try again.');
       setStatus('idle');
+          }
+  };
+
+  const handleUnlockWithPassword = async () => {
+    if (!fileBuffer || !password) return;
+    setStatus('processing');
+    setErrorMessage('');
+
+    try {
+      const pdfDoc = await PDFDocument.load(fileBuffer, { password });
+      const savedBytes = await pdfDoc.save();
+      const blob = new Blob([savedBytes], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      setDownloadUrl(url);
+      setStatus('success');
+      setProgress(100);
+    } catch (error) {
+      setStatus('waiting_password');
+      setErrorMessage('Incorrect password. Please try again.');
     }
   };
 
@@ -125,6 +233,12 @@ export const ToolsGrid: React.FC = () => {
     setProcessedFile(null);
     setFileName('');
     setProgress(0);
+    setErrorMessage('');
+    setFileBuffer(null);
+    if (downloadUrl) {
+      URL.revokeObjectURL(downloadUrl);
+      setDownloadUrl(null);
+    }
   };
 
   const handleDownload = () => {
@@ -140,17 +254,58 @@ export const ToolsGrid: React.FC = () => {
       blob = new Blob([content], { type: 'text/plain' });
     }
 
+    let url: string;
+    let link = document.createElement('a');
+
+    if (processedFileUrl && activeTool.title === 'OCR') {
+       url = processedFileUrl;
+    } else {
+      // Create a dummy file for download
+      const content = `This is a simulated converted file for: ${fileName}.\nTool Used: ${activeTool.title}\nTimestamp: ${new Date().toISOString()}`;
+      const blob = new Blob([content], { type: 'text/plain' });
+      url = URL.createObjectURL(blob);
+    }
+    // Create a dummy file for download
+    let content = "";
+    if (activeTool.title === "Validate PDF/A" && validationResult) {
+      content = validationResult;
+    } else {
+      content = `This is a simulated converted file for: ${fileName}.\nTool Used: ${activeTool.title}\nTimestamp: ${new Date().toISOString()}`;
+    }
+
+    if (downloadUrl) {
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        const originalName = fileName.replace('.pdf', '');
+        link.download = `${originalName}${activeTool.ext}`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        handleClose();
+        return;
+    }
+
+    // Create a dummy file for download (for other tools)
+    const content = `This is a simulated converted file for: ${fileName}.\nTool Used: ${activeTool.title}\nTimestamp: ${new Date().toISOString()}`;
+    const blob = new Blob([content], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    
+     
     const originalName = fileName.replace('.pdf', '');
     link.download = `${originalName}${activeTool.ext}`;
     
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+
+    // Revoke URL only if it was created here (dummy).
+    // If it is processedFileUrl, we might want to keep it valid until closed, but here we can revoke it if we don't allow multiple downloads.
+    // For simplicity, we won't revoke processedFileUrl here to allow re-download if needed,
+    // but we should revoke it when the tool closes.
+    if (!processedFileUrl) {
+       URL.revokeObjectURL(url);
+    }
     
     handleClose();
   };
@@ -257,6 +412,36 @@ export const ToolsGrid: React.FC = () => {
                         ></div>
                      </div>
                      <p className="text-xs text-slate-400 mt-2 text-right">{Math.round(progress)}%</p>
+                  </div>
+                )}
+
+                {status === 'waiting_password' && (
+                  <div className="text-center py-6">
+                    <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Lock className="w-8 h-8 text-orange-600" />
+                    </div>
+                    <h4 className="text-xl font-bold text-slate-900 mb-2">File is Encrypted</h4>
+                    <p className="text-slate-500 mb-6">Enter the password to unlock this file.</p>
+
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Enter Password"
+                      className="w-full border border-slate-300 rounded-xl px-4 py-3 mb-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                      onKeyDown={(e) => e.key === 'Enter' && handleUnlockWithPassword()}
+                    />
+
+                    {errorMessage && (
+                      <p className="text-red-500 text-sm mb-4">{errorMessage}</p>
+                    )}
+
+                    <button
+                      onClick={handleUnlockWithPassword}
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-medium mt-4 transition-colors"
+                    >
+                      Unlock PDF
+                    </button>
                   </div>
                 )}
 
