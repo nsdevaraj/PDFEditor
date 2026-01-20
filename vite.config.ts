@@ -19,6 +19,9 @@ export default defineConfig(({ mode }) => {
           '@': path.resolve(__dirname, '.'),
         }
       },
+      build: {
+        target: 'esnext'
+      },
       esbuild: {
         supported: {
           'top-level-await': true
