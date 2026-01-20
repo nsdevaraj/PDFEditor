@@ -19,6 +19,7 @@ import {
   Download,
   ArrowRight
 } from 'lucide-react';
+import { performOCR } from '../services/ocrService';
 import { PDFDocument } from 'pdf-lib';
 
 export const ToolsGrid: React.FC = () => {
@@ -26,6 +27,7 @@ export const ToolsGrid: React.FC = () => {
   const [status, setStatus] = useState<'idle' | 'processing' | 'success' | 'waiting_password'>('idle');
   const [fileName, setFileName] = useState('');
   const [progress, setProgress] = useState(0);
+  const [processedFileUrl, setProcessedFileUrl] = useState<string | null>(null);
   const [validationResult, setValidationResult] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -55,6 +57,7 @@ export const ToolsGrid: React.FC = () => {
     setStatus('idle');
     setFileName('');
     setProgress(0);
+    setProcessedFileUrl(null);
     setErrorMessage('');
     setPassword('');
     setFileBuffer(null);
@@ -75,6 +78,17 @@ export const ToolsGrid: React.FC = () => {
       setStatus('processing');
       setValidationResult(null);
       
+      if (activeTool.title === 'OCR') {
+        try {
+          const blob = await performOCR(file, (p) => setProgress(p));
+          const url = URL.createObjectURL(blob);
+          setProcessedFileUrl(url);    
+        } catch (err) {
+          console.error(err);
+          setStatus('idle');
+        }
+        return;
+      }
       if (activeTool && activeTool.title === "Validate PDF/A") {
         try {
           const reader = new FileReader();
@@ -103,6 +117,10 @@ export const ToolsGrid: React.FC = () => {
           p = 100;
           clearInterval(interval);
           setStatus('success');
+        } catch (error) {
+          console.error(error);
+          setStatus('idle'); // Or error state
+          alert('OCR Failed. Please try again.');
         }
       setErrorMessage('');
 
@@ -180,6 +198,17 @@ export const ToolsGrid: React.FC = () => {
   const handleDownload = () => {
     if (!activeTool) return;
     
+    let url: string;
+    let link = document.createElement('a');
+
+    if (processedFileUrl && activeTool.title === 'OCR') {
+       url = processedFileUrl;
+    } else {
+      // Create a dummy file for download
+      const content = `This is a simulated converted file for: ${fileName}.\nTool Used: ${activeTool.title}\nTimestamp: ${new Date().toISOString()}`;
+      const blob = new Blob([content], { type: 'text/plain' });
+      url = URL.createObjectURL(blob);
+    }
     // Create a dummy file for download
     let content = "";
     if (activeTool.title === "Validate PDF/A" && validationResult) {
@@ -206,14 +235,21 @@ export const ToolsGrid: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    
+     
     const originalName = fileName.replace('.pdf', '');
     link.download = `${originalName}${activeTool.ext}`;
     
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+
+    // Revoke URL only if it was created here (dummy).
+    // If it is processedFileUrl, we might want to keep it valid until closed, but here we can revoke it if we don't allow multiple downloads.
+    // For simplicity, we won't revoke processedFileUrl here to allow re-download if needed,
+    // but we should revoke it when the tool closes.
+    if (!processedFileUrl) {
+       URL.revokeObjectURL(url);
+    }
     
     handleClose();
   };
