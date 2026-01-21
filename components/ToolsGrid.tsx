@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { PDFDocument } from 'pdf-lib';
 import { validatePDFCompliance } from '../services/geminiService';
 import { 
   FileText, 
@@ -32,10 +33,13 @@ export const ToolsGrid: React.FC = () => {
   const [status, setStatus] = useState<'idle' | 'configuring' | 'processing' | 'success' | 'waiting_password'>('idle');
   const [fileName, setFileName] = useState('');
   const [progress, setProgress] = useState(0);
+const [password, setPassword] = useState('');
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [resultBlob, setResultBlob] = useState<Blob | null>(null);
   const [currentFile, setCurrentFile] = useState<UploadedFile | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    
+  const [processedFile, setProcessedFile] = useState<Blob | null>(null);
   const [processedFileUrl, setProcessedFileUrl] = useState<string | null>(null);
   const [validationResult, setValidationResult] = useState<string | null>(null);
   const [outputFormat, setOutputFormat] = useState<'jpg' | 'png' | 'tiff'>('jpg');
@@ -91,6 +95,12 @@ export const ToolsGrid: React.FC = () => {
       // Reset input immediately so we can select same file again if needed
       e.target.value = '';
 
+      if (activeTool.title === 'Protect PDF') {
+        setSelectedFile(file);
+        setStatus('password');
+      } else { 
+
+        // Simulate processing progress
       if (activeTool?.title === "Split PDF") {
         const fileUrl = URL.createObjectURL(file);
         const reader = new FileReader();
@@ -216,6 +226,39 @@ export const ToolsGrid: React.FC = () => {
     }
   };
 
+  const handleEncrypt = async () => {
+    if (!selectedFile || !password) return;
+    setStatus('processing');
+    setProgress(10);
+
+    try {
+      const arrayBuffer = await selectedFile.arrayBuffer();
+      const pdfDoc = await PDFDocument.load(arrayBuffer);
+      pdfDoc.encrypt({
+        userPassword: password,
+        ownerPassword: password,
+        permissions: {
+          printing: 'highResolution',
+          modifying: false,
+          copying: false,
+          annotating: false,
+          fillingForms: false,
+          contentAccessibility: false,
+          documentAssembly: false,
+        },
+      });
+      const pdfBytes = await pdfDoc.save();
+      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+      setProcessedFile(blob);
+      setProgress(100);
+      setStatus('success');
+    } catch (error) {
+      console.error('Encryption failed:', error);
+      alert('Encryption failed. Please try again.');
+      setStatus('idle');
+          }
+  };
+
   const handleConvert = async () => {
     if (!selectedFile) return;
     setStatus('processing');
@@ -268,6 +311,10 @@ export const ToolsGrid: React.FC = () => {
     setConversionResult(null);
     setOutputFormat('jpg');
     setPassword('');
+    setSelectedFile(null);
+    setProcessedFile(null);
+    setFileName('');
+    setProgress(0);
     setErrorMessage('');
     setFileBuffer(null);
     setProcessedFileUrl(null);
@@ -275,6 +322,26 @@ export const ToolsGrid: React.FC = () => {
   };
 
   const handleDownload = () => {
+    if (!resultBlob || !activeTool) return;
+    
+    let blob: Blob;
+
+    if (processedFile) {
+      blob = processedFile;
+    } else {
+      // Create a dummy file for download
+      const content = `This is a simulated converted file for: ${fileName}.\nTool Used: ${activeTool.title}\nTimestamp: ${new Date().toISOString()}`;
+      blob = new Blob([content], { type: 'text/plain' });
+    let url = downloadUrl;
+    let isTempUrl = false;
+
+    if (!url) {
+        // Create a dummy file for download
+        const content = `This is a simulated converted file for: ${fileName}.\nTool Used: ${activeTool.title}\nTimestamp: ${new Date().toISOString()}`;
+        const blob = new Blob([content], { type: 'text/plain' });
+        url = URL.createObjectURL(blob);
+        isTempUrl = true;
+      }
     if (activeTool.title === "Validate PDF/A" && validationResult) {
        const blob = new Blob([validationResult], { type: 'text/plain' });
        const url = URL.createObjectURL(blob);
@@ -381,6 +448,31 @@ export const ToolsGrid: React.FC = () => {
                    </button>
                 </div>
 
+                {status === 'password' && (
+                  <div className="text-center py-6">
+                    <div className="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Lock className="w-8 h-8 text-indigo-600" />
+                    </div>
+                    <h4 className="text-xl font-bold text-slate-900 mb-2">Protect PDF</h4>
+                    <p className="text-slate-500 mb-6">Enter a password to encrypt your file</p>
+
+                    <div className="mb-6">
+                      <input
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="Enter password"
+                        className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                        autoFocus
+                      />
+                    </div>
+
+                    <button
+                      onClick={handleEncrypt}
+                      disabled={!password}
+                      className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white py-3 rounded-xl font-medium transition-colors"
+                    >
+                      Encrypt PDF
                 {status === 'configuring' && (
                   <div className="text-center py-6">
                     <h4 className="font-semibold text-slate-900 mb-4">Select Output Format</h4>
