@@ -22,7 +22,6 @@ import {
 } from 'lucide-react';
 import { compressPDF } from '../services/pdfService';
 import { convertPDFToExcel, convertPDFToPPT } from '../services/conversionService';
-import { PDFDocument } from 'pdf-lib';
 import { UploadedFile } from '../types';
 import { SplitPDF } from './SplitPDF';
 import { convertPdfToImages } from '../utils/pdfConverter';
@@ -33,7 +32,6 @@ export const ToolsGrid: React.FC = () => {
   const [status, setStatus] = useState<'idle' | 'configuring' | 'processing' | 'success' | 'waiting_password'>('idle');
   const [fileName, setFileName] = useState('');
   const [progress, setProgress] = useState(0);
-const [password, setPassword] = useState('');
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [resultBlob, setResultBlob] = useState<Blob | null>(null);
   const [currentFile, setCurrentFile] = useState<UploadedFile | null>(null);
@@ -224,6 +222,7 @@ const [password, setPassword] = useState('');
         alert(`Operation failed: ${error}`);
       }
     }
+  }
   };
 
   const handleEncrypt = async () => {
@@ -256,7 +255,7 @@ const [password, setPassword] = useState('');
       console.error('Encryption failed:', error);
       alert('Encryption failed. Please try again.');
       setStatus('idle');
-          }
+    }
   };
 
   const handleConvert = async () => {
@@ -332,6 +331,8 @@ const [password, setPassword] = useState('');
       // Create a dummy file for download
       const content = `This is a simulated converted file for: ${fileName}.\nTool Used: ${activeTool.title}\nTimestamp: ${new Date().toISOString()}`;
       blob = new Blob([content], { type: 'text/plain' });
+    }
+
     let url = downloadUrl;
     let isTempUrl = false;
 
@@ -341,7 +342,8 @@ const [password, setPassword] = useState('');
         const blob = new Blob([content], { type: 'text/plain' });
         url = URL.createObjectURL(blob);
         isTempUrl = true;
-      }
+    }
+
     if (activeTool.title === "Validate PDF/A" && validationResult) {
        const blob = new Blob([validationResult], { type: 'text/plain' });
        const url = URL.createObjectURL(blob);
@@ -473,6 +475,10 @@ const [password, setPassword] = useState('');
                       className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white py-3 rounded-xl font-medium transition-colors"
                     >
                       Encrypt PDF
+                    </button>
+                  </div>
+                )}
+
                 {status === 'configuring' && (
                   <div className="text-center py-6">
                     <h4 className="font-semibold text-slate-900 mb-4">Select Output Format</h4>
