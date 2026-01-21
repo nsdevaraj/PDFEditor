@@ -26,9 +26,8 @@ import { PDFDocument } from 'pdf-lib';
 import { UploadedFile } from '../types';
 import { SplitPDF } from './SplitPDF';
 import { convertPdfToImages } from '../utils/pdfConverter';
-
 import { performOCR } from '../services/ocrService';
-import { PDFDocument } from 'pdf-lib';
+
 export const ToolsGrid: React.FC = () => {
   const [activeTool, setActiveTool] = useState<any>(null);
   const [status, setStatus] = useState<'idle' | 'configuring' | 'processing' | 'success' | 'waiting_password'>('idle');
@@ -45,13 +44,11 @@ const [password, setPassword] = useState('');
   const [validationResult, setValidationResult] = useState<string | null>(null);
   const [outputFormat, setOutputFormat] = useState<'jpg' | 'png' | 'tiff'>('jpg');
   const [conversionResult, setConversionResult] = useState<Blob | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // New state for Unlock PDF
   const [password, setPassword] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [fileBuffer, setFileBuffer] = useState<ArrayBuffer | null>(null);
-  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const tools = [
     { title: "PDF to Word", desc: "Convert PDF files to Microsoft Word", icon: FileText, color: "text-blue-600", bg: "bg-blue-100", ext: ".docx" },
@@ -78,6 +75,7 @@ const [password, setPassword] = useState('');
     setErrorMessage('');
     setPassword('');
     setFileBuffer(null);
+    setValidationResult(null);
     if (downloadUrl) {
       URL.revokeObjectURL(downloadUrl);
       setDownloadUrl(null);
@@ -92,6 +90,10 @@ const [password, setPassword] = useState('');
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       setFileName(file.name);
+      setSelectedFile(file);
+
+      // Reset input immediately so we can select same file again if needed
+      e.target.value = '';
 
       if (activeTool.title === 'Protect PDF') {
         setSelectedFile(file);
@@ -118,13 +120,37 @@ const [password, setPassword] = useState('');
           }
         };
         reader.readAsDataURL(file);
-        // Reset input immediately so we can select same file again if needed
-      setSelectedFile(file);
+        return;
+      }
 
       if (activeTool && activeTool.title === "PDF to Image") {
         setStatus('configuring');
-        // Reset input immediately for re-selection if needed, though usually handled after close
-        e.target.value = '';
+        return;
+      }
+
+      if (activeTool?.title === "Unlock PDF") {
+        try {
+            const buffer = await file.arrayBuffer();
+            try {
+                // Attempt to load without password first (in case it's just owner password or no password)
+                const pdfDoc = await PDFDocument.load(buffer);
+                // If loaded, save it (this removes encryption if it was just owner password)
+                const savedBytes = await pdfDoc.save();
+                const blob = new Blob([savedBytes], { type: 'application/pdf' });
+                const url = URL.createObjectURL(blob);
+                setDownloadUrl(url);
+                setResultBlob(blob);
+                setStatus('success');
+                setProgress(100);
+            } catch (error) {
+                // Failed to load, likely due to password
+                setFileBuffer(buffer);
+                setStatus('waiting_password');
+            }
+        } catch (err) {
+            setErrorMessage('Failed to read file.');
+            setStatus('idle');
+        }
         return;
       }
 
@@ -132,143 +158,72 @@ const [password, setPassword] = useState('');
       setProgress(10); // Start progress
 
       try {
-        let blob: Blob | null = null;
-
-        // Simulate progress for visual feedback during async operation
-        const progressInterval = setInterval(() => {
-             setProgress(prev => Math.min(prev + 5, 90));
-        }, 500);
-
         if (activeTool.title === "PDF to Excel") {
-           blob = await convertPDFToExcel(file);
+           const blob = await convertPDFToExcel(file);
+           setResultBlob(blob);
+           const url = URL.createObjectURL(blob);
+           setDownloadUrl(url);
+           setStatus('success');
+           setProgress(100);
         } else if (activeTool.title === "PDF to PPT") {
-           blob = await convertPDFToPPT(file);
+           const blob = await convertPDFToPPT(file);
+           setResultBlob(blob);
+           const url = URL.createObjectURL(blob);
+           setDownloadUrl(url);
+           setStatus('success');
+           setProgress(100);
+        } else if (activeTool.title === "Compress PDF") {
+           const blob = await compressPDF(file, (p) => setProgress(p));
+           setResultBlob(blob);
+           const url = URL.createObjectURL(blob);
+           setDownloadUrl(url);
+           setStatus('success');
+        } else if (activeTool.title === 'OCR') {
+           const blob = await performOCR(file, (p) => setProgress(p));
+           setResultBlob(blob);
+           const url = URL.createObjectURL(blob);
+           setProcessedFileUrl(url);
+           setDownloadUrl(url); // Ensure download button works
+           setStatus('success');
+        } else if (activeTool.title === "Validate PDF/A") {
+           const reader = new FileReader();
+           reader.onload = async (event) => {
+             if (event.target && event.target.result) {
+               const base64Data = (event.target.result as string).split(',')[1];
+               const report = await validatePDFCompliance(base64Data, file.type);
+               setValidationResult(report);
+               setStatus('success');
+               setProgress(100);
+             }
+           };
+           reader.readAsDataURL(file);
         } else {
-           // Fallback for others (simulated)
-           await new Promise(resolve => setTimeout(resolve, 2000));
-           const content = `Simulated content for ${activeTool.title}\nFile: ${file.name}`;
-           blob = new Blob([content], { type: 'text/plain' });
-        }
+           // Fallback / Simulated processing for tools not yet fully implemented
+            const progressInterval = setInterval(() => {
+                setProgress(prev => {
+                    const next = prev + 10;
+                    if (next >= 100) {
+                        clearInterval(progressInterval);
+                        setStatus('success');
+                        return 100;
+                    }
+                    return next;
+                });
+            }, 200);
 
-        clearInterval(progressInterval);
-        setResultBlob(blob);
-        setProgress(100);
-        setStatus('success');
-      } catch (error) {
-        console.error("Conversion failed", error);
-        setStatus('idle');
-        alert("Conversion failed. See console for details.");
-      setValidationResult(null);
-      
-      if (activeTool?.title === "Compress PDF") {
-         try {
-             const blob = await compressPDF(file, (p) => setProgress(p));
-             const url = URL.createObjectURL(blob);
-             setDownloadUrl(url);
-             setStatus('success');
-         } catch (error) {
-             console.error("Compression failed:", error);
-             setStatus('idle');
-             alert("Compression failed. Please try again.");
-         }
-      } else {
-        // Simulate processing progress
-        let p = 0;
-        const interval = setInterval(() => {
-            p += Math.random() * 10;
-            if (p >= 100) {
-            p = 100;
-            clearInterval(interval);
-            setStatus('success');
-            }
-            setProgress(Math.min(p, 100)); 
-        }, 200);
-      }
-    }
-      if (activeTool.title === 'OCR') {
-        try {
-          const blob = await performOCR(file, (p) => setProgress(p));
-          const url = URL.createObjectURL(blob);
-          setProcessedFileUrl(url);    
-        } catch (err) {
-          console.error(err);
-          setStatus('idle');
-        }
-        return;
-      }
-      if (activeTool && activeTool.title === "Validate PDF/A") {
-        try {
-          const reader = new FileReader();
-          reader.onload = async (event) => {
-            if (event.target && event.target.result) {
-              const base64Data = (event.target.result as string).split(',')[1];
-              const report = await validatePDFCompliance(base64Data, file.type);
-              setValidationResult(report);
-              setStatus('success');
-              setProgress(100);
-            }
-          };
-          reader.readAsDataURL(file);
-        } catch (err) {
-          console.error(err);
-          setStatus('idle');
-        }
-        return;
-      }
-
-      // Simulate processing progress
-      let p = 0;
-      const interval = setInterval(() => {
-        p += Math.random() * 10;
-        if (p >= 100) {
-          p = 100;
-          clearInterval(interval);
-          setStatus('success');
-        } catch (error) {
-          console.error(error);
-          setStatus('idle'); // Or error state
-          alert('OCR Failed. Please try again.');
-        }
-      setErrorMessage('');
-
-      if (activeTool.title === "Unlock PDF") {
-        try {
-          const buffer = await file.arrayBuffer();
-          try {
-            // Attempt to load without password first (in case it's just owner password or no password)
-            const pdfDoc = await PDFDocument.load(buffer);
-            // If loaded, save it (this removes encryption if it was just owner password)
-            const savedBytes = await pdfDoc.save();
-            const blob = new Blob([savedBytes], { type: 'application/pdf' });
+            // Create a dummy result for simulation
+            const content = `Simulated content for ${activeTool.title}\nFile: ${file.name}`;
+            const blob = new Blob([content], { type: 'text/plain' });
+            setResultBlob(blob);
             const url = URL.createObjectURL(blob);
             setDownloadUrl(url);
-            setStatus('success');
-            setProgress(100);
-          } catch (error) {
-            // Failed to load, likely due to password
-            setFileBuffer(buffer);
-            setStatus('waiting_password');
-          }
-        } catch (err) {
-            setErrorMessage('Failed to read file.');
-            setStatus('idle');
         }
-      } else {
-        // Simulate processing progress for other tools
-        let p = 0;
-        const interval = setInterval(() => {
-          p += Math.random() * 10;
-          if (p >= 100) {
-            p = 100;
-            clearInterval(interval);
-            setStatus('success');
-          }
-          setProgress(Math.min(p, 100));
-        }, 200);
+      } catch (error) {
+        console.error("Operation failed", error);
+        setStatus('idle');
+        alert(`Operation failed: ${error}`);
       }
     }
-    // Reset input
-    e.target.value = '';
   };
 
   const handleEncrypt = async () => {
@@ -314,6 +269,7 @@ const [password, setPassword] = useState('');
         setProgress(p);
       });
       setConversionResult(result);
+      setResultBlob(result);
       setStatus('success');
     } catch (error) {
       console.error(error);
@@ -321,6 +277,7 @@ const [password, setPassword] = useState('');
       alert('Error converting file');
     }
   };
+
   const handleUnlockWithPassword = async () => {
     if (!fileBuffer || !password) return;
     setStatus('processing');
@@ -332,6 +289,7 @@ const [password, setPassword] = useState('');
       const blob = new Blob([savedBytes], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);
       setDownloadUrl(url);
+      setResultBlob(blob);
       setStatus('success');
       setProgress(100);
     } catch (error) {
@@ -359,10 +317,8 @@ const [password, setPassword] = useState('');
     setProgress(0);
     setErrorMessage('');
     setFileBuffer(null);
-    if (downloadUrl) {
-      URL.revokeObjectURL(downloadUrl);
-      setDownloadUrl(null);
-    }
+    setProcessedFileUrl(null);
+    setValidationResult(null);
   };
 
   const handleDownload = () => {
@@ -385,9 +341,22 @@ const [password, setPassword] = useState('');
         const blob = new Blob([content], { type: 'text/plain' });
         url = URL.createObjectURL(blob);
         isTempUrl = true;
+      }
+    if (activeTool.title === "Validate PDF/A" && validationResult) {
+       const blob = new Blob([validationResult], { type: 'text/plain' });
+       const url = URL.createObjectURL(blob);
+       const link = document.createElement('a');
+       link.href = url;
+       const originalName = fileName.replace(/\.pdf$/i, '');
+       link.download = `${originalName}_report.txt`;
+       document.body.appendChild(link);
+       link.click();
+       document.body.removeChild(link);
+       URL.revokeObjectURL(url);
+       handleClose();
+       return;
     }
 
-    const url = URL.createObjectURL(resultBlob);
     if (activeTool.title === "PDF to Image" && conversionResult) {
        const url = URL.createObjectURL(conversionResult);
        const link = document.createElement('a');
@@ -402,29 +371,10 @@ const [password, setPassword] = useState('');
        return;
     }
 
-    let url: string;
-    let link = document.createElement('a');
-
-    if (processedFileUrl && activeTool.title === 'OCR') {
-       url = processedFileUrl;
-    } else {
-      // Create a dummy file for download
-      const content = `This is a simulated converted file for: ${fileName}.\nTool Used: ${activeTool.title}\nTimestamp: ${new Date().toISOString()}`;
-      const blob = new Blob([content], { type: 'text/plain' });
-      url = URL.createObjectURL(blob);
-    }
-    // Create a dummy file for download
-    let content = "";
-    if (activeTool.title === "Validate PDF/A" && validationResult) {
-      content = validationResult;
-    } else {
-      content = `This is a simulated converted file for: ${fileName}.\nTool Used: ${activeTool.title}\nTimestamp: ${new Date().toISOString()}`;
-    }
-
     if (downloadUrl) {
         const link = document.createElement('a');
         link.href = downloadUrl;
-        const originalName = fileName.replace('.pdf', '');
+        const originalName = fileName.replace(/\.pdf$/i, '');
         link.download = `${originalName}${activeTool.ext}`;
         document.body.appendChild(link);
         link.click();
@@ -432,33 +382,6 @@ const [password, setPassword] = useState('');
         handleClose();
         return;
     }
-
-    // Create a dummy file for download (for other tools)
-    const content = `This is a simulated converted file for: ${fileName}.\nTool Used: ${activeTool.title}\nTimestamp: ${new Date().toISOString()}`;
-    const blob = new Blob([content], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    
-    const originalName = fileName.replace(/\.pdf$/i, '');
-      
-    link.download = `${originalName}${activeTool.ext}`;
-    
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-
-    if (isTempUrl) {
-        URL.revokeObjectURL(url);
-    // Revoke URL only if it was created here (dummy).
-    // If it is processedFileUrl, we might want to keep it valid until closed, but here we can revoke it if we don't allow multiple downloads.
-    // For simplicity, we won't revoke processedFileUrl here to allow re-download if needed,
-    // but we should revoke it when the tool closes.
-    if (!processedFileUrl) {
-       URL.revokeObjectURL(url);
-    }
-    
-    handleClose();
   };
 
   if (activeTool?.title === "Split PDF" && currentFile) {

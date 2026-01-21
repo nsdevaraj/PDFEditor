@@ -22,6 +22,11 @@ export default defineConfig(({ mode }) => {
         'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
         'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
       },
+      resolve: {
+        alias: {
+          '@': path.resolve(__dirname, '.'),
+        }
+      },
       optimizeDeps: {
         exclude: ['pdfjs-dist'],
         esbuildOptions: {
@@ -35,28 +40,6 @@ export default defineConfig(({ mode }) => {
         supported: {
           'top-level-await': true
         },
-      },
-      build: {
-        target: 'esnext'
-      },
-      resolve: {
-        alias: {
-          '@': path.resolve(__dirname, '.'),
-        }
-      },
-      build: {
-        target: 'esnext'
-      },
-      esbuild: {
-        supported: {
-          'top-level-await': true
-        },
-      },
-      
-      optimizeDeps: {
-        esbuildOptions: {
-          target: 'esnext'
-        }
       },
       build: {
         target: 'esnext'
