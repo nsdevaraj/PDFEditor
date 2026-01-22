@@ -87,7 +87,7 @@ test.describe('PDF Tools', () => {
   });
 
   test('Protect PDF', async ({ page }) => {
-    test.skip(true, 'Skipping Protect PDF as the installed pdf-lib version does not support encryption.');
+    // test.skip(true, 'Skipping Protect PDF as the installed pdf-lib version does not support encryption.');
 
     await page.getByText('Protect PDF').click();
     const fileInput = page.locator('input[type="file"]');

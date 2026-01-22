@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@google/genai": "^1.37.0",
+    "@pdfsmaller/pdf-encrypt-lite": "^1.0.1",
     "@types/jspdf": "^1.3.3",
     "docx": "^9.5.1",
     "file-saver": "^2.0.5",
