@@ -99,6 +99,7 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
 
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [lastCreatedElementId, setLastCreatedElementId] = useState<string | null>(null);
 
   // Panning State
   const [isPanning, setIsPanning] = useState(false);
@@ -270,7 +271,29 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
       if (!canvasRef.current) return;
       const viewportWidth = canvasRef.current.width / scale;
       const viewportHeight = canvasRef.current.height / scale;
+  }
+  // Auto-focus new text elements
+  useEffect(() => {
+    if (lastCreatedElementId) {
+      const el = elements.find(e => e.id === lastCreatedElementId);
+      if (el && el.type === 'text') {
+        const domEl = document.getElementById(`text-input-${el.id}`);
+        if (domEl) {
+          domEl.focus();
+          // Place cursor at end
+          const range = document.createRange();
+          const sel = window.getSelection();
+          range.selectNodeContents(domEl);
+          range.collapse(false);
+          sel?.removeAllRanges();
+          sel?.addRange(range);
+        }
+      }
+      setLastCreatedElementId(null);
+    }
+  }, [lastCreatedElementId, elements]);
 
+  const addElement = (type: 'text' | 'signature' | 'highlight' | 'redact', x: number, y: number) => {
       const newElement: EditorElement = {
           id: Date.now().toString(),
           type,
@@ -283,7 +306,9 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
       };
       
       const newElements = [...elements, newElement];
-      setElements(newElements);
+
+      setElements(prev => [...prev, newElement]);
+      setLastCreatedElementId(newElement.id);
       addToHistory(newElements);
       setActiveTool('select');
   };
@@ -339,6 +364,17 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
       // 4. Select Tool - Deselect or start drag (handled by element mousedown)
   };
 
+
+  const handleCanvasClick = (e: React.MouseEvent) => {
+      if (activeTool === 'none' || activeTool === 'eraser' || !containerRef.current) return;
+
+      const containerRect = containerRef.current.getBoundingClientRect();
+      const x = (e.clientX - containerRect.left) / scale;
+      const y = (e.clientY - containerRect.top) / scale;
+
+      addElement(activeTool, x, y); 
+  };
+  
   const handleElementMouseDown = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     
@@ -638,7 +674,7 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
 
   return (
     <div 
-      className="flex h-screen w-full bg-slate-100 overflow-hidden relative" 
+      className="flex h-full w-full bg-slate-100 overflow-hidden relative"
       onMouseUp={handleMouseUp} 
       onMouseMove={handleMouseMove}
       onClick={() => setActiveDropdown(null)}
@@ -661,24 +697,69 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
       </svg>
 
       {/* Top Bar */}
-      <div className="absolute top-0 left-0 right-0 h-16 bg-white shadow-sm flex items-center justify-between px-4 z-10 border-b border-slate-200">
-        <div className="flex items-center space-x-4">
+
+  <div className="absolute top-0 left-0 right-0 h-16 bg-white shadow-sm flex items-center justify-between px-4 z-10 border-b border-slate-200 overflow-x-auto overflow-y-hidden">
+        <div className="flex items-center space-x-3 min-w-max">
             <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg text-slate-500">
                 <X className="w-5 h-5" />
             </button>
 
+            <div className="flex items-center space-x-2">
+                <FileText className="w-5 h-5 text-blue-600" />
+                <span className="font-semibold text-slate-800 truncate max-w-[150px] md:max-w-[200px]">{file.name}</span>
+            </div>
             <div className="h-6 w-px bg-slate-200" />
 
             <div className="flex items-center space-x-2">
                 <button 
                     onClick={() => setActiveTool('hand')}
                     className={`p-2 rounded-lg ${activeTool === 'hand' ? 'bg-blue-100 text-blue-600' : 'text-slate-500 hover:bg-slate-100'}`}
-                    title="Hand Tool (Pan)"
-                >
+                    title="Hand Tool (Pan)" >
                     <Hand className="w-5 h-5" />
-                </button>
+                </button>  
+        </div>
+
+        <div className="flex items-center space-x-4 min-w-max px-4">
+             {/* Pagination */}
+             {numPages > 0 && (
+                 <div className="flex items-center space-x-2 bg-slate-100 rounded-lg p-1 mr-2">
+                     <button 
+                        onClick={() => changePage(-1)} 
+                        disabled={currentPage <= 1}
+                        className="p-1 hover:bg-white rounded disabled:opacity-30"
+                     >
+                         <ChevronLeft className="w-4 h-4" />
+                     </button>
+                     <span className="text-xs font-medium w-16 text-center text-slate-600">
+                        {currentPage} / {numPages}
+                     </span>
+                     <button 
+                        onClick={() => changePage(1)} 
+                        disabled={currentPage >= numPages}
+                        className="p-1 hover:bg-white rounded disabled:opacity-30"
+                     >
+                         <ChevronRight className="w-4 h-4" />
+                     </button>
+                 </div>
+             )}
+
+            <div className="flex items-center space-x-2 bg-slate-100 rounded-lg p-1">
+                <button onClick={() => setScale(Math.max(0.5, scale - 0.1))} className="p-2 hover:bg-white rounded shadow-sm text-slate-600"><ZoomOut className="w-4 h-4" /></button>
+                <span className="text-xs font-medium w-12 text-center text-slate-600">{Math.round(scale * 100)}%</span>
+                <button onClick={() => setScale(Math.min(2.5, scale + 0.1))} className="p-2 hover:bg-white rounded shadow-sm text-slate-600"><ZoomIn className="w-4 h-4" /></button>
+            </div>
+        </div>
+
+        <div className="flex items-center space-x-4 min-w-max px-4">
+             <div className="flex items-center space-x-1 border-r border-slate-200 pr-4">
                 <button 
-                    onClick={() => setActiveTool('select')}
+                    onClick={() => setActiveTool(activeTool === 'signature' ? 'none' : 'signature')}
+                    className={`p-2 rounded-lg transition-colors ${activeTool === 'signature' ? 'bg-blue-100 text-blue-600' : 'text-slate-500 hover:bg-slate-100'}`}
+                    title="Sign Document" 
+                >
+                    <MousePointer2 className="w-5 h-5" />
+                </button>
+              <button  onClick={() => setActiveTool('select')}
                     className={`p-2 rounded-lg ${activeTool === 'select' ? 'bg-blue-100 text-blue-600' : 'text-slate-500 hover:bg-slate-100'}`}
                     title="Select Tool"
                 >
@@ -701,8 +782,8 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
 
             <div className="flex items-center space-x-2 relative">
                  <button
-                    onClick={() => addElementCentered('text')}
-                    className={`p-2 rounded-lg ${activeTool === 'text' ? 'bg-blue-100 text-blue-600' : 'text-slate-500 hover:bg-slate-100'}`}
+                    onClick={() => addElementCentered('text')} 
+                    className={`p-2 rounded-lg transition-colors ${activeTool === 'text' ? 'bg-blue-100 text-blue-600' : 'text-slate-500 hover:bg-slate-100'}`}
                     title="Add Text"
                 >
                     <Type className="w-5 h-5" />
@@ -790,7 +871,20 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
                  <button
                     onClick={() => addElementCentered('signature')}
                     className={`p-2 rounded-lg ${activeTool === 'signature' ? 'bg-blue-100 text-blue-600' : 'text-slate-500 hover:bg-slate-100'}`}
-                    title="Sign"
+                    title="Sign"                >
+
+                <button 
+                    onClick={() => setActiveTool(activeTool === 'highlight' ? 'none' : 'highlight')}
+                    className={`p-2 rounded-lg transition-colors ${activeTool === 'highlight' ? 'bg-yellow-100 text-yellow-600' : 'text-slate-500 hover:bg-slate-100'}`}
+                    title="Highlight"
+                >
+                    <Highlighter className="w-5 h-5" />
+                </button>
+                <button
+                    onClick={() => setActiveTool(activeTool === 'redact' ? 'none' : 'redact')}
+                    className={`p-2 rounded-lg transition-colors ${activeTool === 'redact' ? 'bg-slate-200 text-slate-900' : 'text-slate-500 hover:bg-slate-100'}`}
+                    title="Redact (Permanently hide content)"
+
                 >
                     <FileSignature className="w-5 h-5" />
                 </button>
@@ -836,7 +930,7 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex mt-16 h-[calc(100vh-64px)]">
+      <div className="flex-1 flex mt-16 h-[calc(100%-64px)] relative">
         {/* PDF Viewer Canvas */}
         <div
             ref={editorContainerRef}
@@ -846,11 +940,13 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
         >
             <div 
                 ref={containerRef}
+                onClick={handleCanvasClick}
                 className="bg-white shadow-2xl transition-transform duration-75 ease-out origin-top relative"
                 style={{ 
                     minHeight: '400px',
-                    minWidth: '300px',
-                    cursor: activeTool === 'eraser' ? 'crosshair' : 'inherit'
+                    minWidth: '300px', 
+                    cursor: activeTool === 'eraser' || activeTool === 'text' || activeTool === 'highlight' || activeTool === 'redact' || activeTool === 'signature' ? 'crosshair' : 'default'
+
                 }}
             >
                 {isRendering && !pdfDoc && (
@@ -950,7 +1046,53 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
                            <div className="absolute -top-3 -right-3 opacity-0 group-hover:opacity-100 transition-opacity">
                                 <button
                                     onClick={(e) => { e.stopPropagation(); setElements(elements.filter(e => e.id !== el.id)) }}
-                                    className="p-1 bg-red-500 text-white rounded-full shadow hover:bg-red-600 scale-75"
+                                    className="p-1 bg-red-500 text-white rounded-full shadow hover:bg-red-600 scale-75" >
+                                            <X className="w-3 h-3" />
+                                        </button>
+                           </div>
+                       )}
+                       {el.type === 'redact' && (
+                           <div className="relative group">
+                                <div
+                                        className="bg-black"
+                                        style={{
+                                            width: el.width,
+                                            height: el.height
+                                        }}
+                                />
+                                {activeTool !== 'eraser' && (
+                                   <div className="absolute -top-2 -right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); setElements(elements.filter(e => e.id !== el.id)) }}
+                                            className="p-1 bg-slate-500 text-white rounded-full shadow hover:bg-slate-600"
+                                        >
+                                            <X className="w-3 h-3" />
+                                        </button>
+                                   </div>
+                               )}
+                           </div>
+                       )}
+
+                       {el.type === 'text' && (
+                            <div className="group relative">
+                                <div 
+                                    id={`text-input-${el.id}`}
+                                    contentEditable={activeTool !== 'eraser'}
+                                    suppressContentEditableWarning
+                                    onBlur={(e) => updateElementContent(el.id, e.currentTarget.innerText)}
+                                    className="text-slate-900 text-base px-2 py-1 border border-transparent hover:border-blue-400 hover:bg-blue-50/30 rounded outline-none min-w-[50px] cursor-text"
+                                    onMouseDown={(e) => {
+                                        // If interacting with text input, stop drag unless clicking border? 
+                                        // For simplicity, we allow drag via container, text edit via click
+                                        e.stopPropagation(); 
+                                    }}
+                                    // Custom drag handler for the text container wrapper to allow moving
+                                >
+                                    {el.content}
+                                </div>
+                                <div 
+                                    className="absolute -top-4 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity cursor-move bg-slate-800 text-white rounded px-1 text-[10px]"
+                                    onMouseDown={(e) => handleElementMouseDown(e, el.id)}
                                 >
                                     <X className="w-3 h-3" />
                                 </button>
@@ -977,8 +1119,9 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
         </div>
 
         {/* AI Assistant Sidebar */}
-        <div className={`${isChatOpen ? 'w-96' : 'w-0'} bg-white border-l border-slate-200 transition-all duration-300 flex flex-col relative z-30`}>
-             <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0">
+        <div className={`${isChatOpen ? 'w-full md:w-96' : 'w-0'} absolute md:relative right-0 h-full bg-white border-l border-slate-200 transition-all duration-300 flex flex-col z-30`}>
+            {/* ... Chat Interface ... */}
+            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0">
                 <div className="flex items-center space-x-2 text-blue-600">
                     <Wand2 className="w-5 h-5" />
                     <h3 className="font-bold">AI Assistant</h3>
