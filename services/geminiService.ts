@@ -5,7 +5,7 @@ import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 // We assume process.env.API_KEY is available as per instructions.
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
 
-const MODEL_NAME = 'gemini-1.5-flash';
+const MODEL_NAME = 'gemini-3-flash-preview';
 
 export const analyzeDocument = async (
   prompt: string,
@@ -117,42 +117,3 @@ export const rewriteText = async (text: string, tone: 'professional' | 'casual' 
      return "Error rewriting text.";
    }
  };
-
-export const validatePDFCompliance = async (
-  base64Data: string,
-  mimeType: string
-): Promise<string> => {
-  try {
-    const prompt = `Analyze this PDF document for compliance with PDF/A ISO standards.
-    Check for:
-    1. Embedded fonts
-    2. Color space usage (should be device-independent)
-    3. Metadata validity
-    4. Absence of prohibited elements (like Javascript, audio/video, encryption)
-
-    Provide a detailed compliance report listing pass/fail for key criteria and an overall compliance status.
-    Note: As an AI, perform a structural analysis based on the provided content.`;
-
-    const response = await ai.models.generateContent({
-      model: MODEL_NAME,
-      contents: {
-        parts: [
-          {
-            inlineData: {
-              mimeType: mimeType,
-              data: base64Data,
-            },
-          },
-          {
-            text: prompt,
-          },
-        ],
-      },
-    });
-
-    return response.text || "No report generated.";
-  } catch (error: any) {
-    console.error("Validation Error:", error);
-    return "Failed to validate document. " + error.message;
-  }
-};

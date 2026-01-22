@@ -18,23 +18,6 @@ export default defineConfig(({ mode }) => {
         alias: {
           '@': path.resolve(__dirname, '.'),
         }
-      },
-      optimizeDeps: {
-        exclude: ['pdfjs-dist'],
-        esbuildOptions: {
-          target: 'esnext',
-          supported: {
-            'top-level-await': true
-          },
-        }
-      },
-      esbuild: {
-        supported: {
-          'top-level-await': true
-        },
-      },
-      build: {
-        target: 'esnext'
       }
     };
 });
