@@ -24,11 +24,21 @@ import {
   ArrowLeftRight,
   Hash,
   Crop,
-  Wrench
+  Wrench,
+  Globe
 } from 'lucide-react';
 import { compressPDF } from '../services/pdfService';
 import { repairPDF } from '../services/repairService';
-import { convertPDFToExcel, convertPDFToPPT, convertPDFToWord } from '../services/conversionService';
+import {
+  convertPDFToExcel,
+  convertPDFToPPT,
+  convertPDFToWord,
+  convertWordToPDF,
+  convertExcelToPDF,
+  convertPPTToPDF,
+  convertImageToPDF,
+  convertHTMLToPDF
+} from '../services/conversionService';
 import { UploadedFile } from '../types';
 import { SplitPDF } from './SplitPDF';
 import { RotatePDF } from './RotatePDF';
@@ -40,7 +50,7 @@ import { performOCR } from '../services/ocrService';
 
 export const ToolsGrid: React.FC = () => {
   const [activeTool, setActiveTool] = useState<any>(null);
-  const [status, setStatus] = useState<'idle' | 'configuring' | 'processing' | 'success' | 'waiting_password'>('idle');
+  const [status, setStatus] = useState<'idle' | 'configuring' | 'processing' | 'success' | 'waiting_password' | 'selecting_html_input'>('idle');
   const [fileName, setFileName] = useState('');
   const [progress, setProgress] = useState(0);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
@@ -56,6 +66,7 @@ export const ToolsGrid: React.FC = () => {
   const [password, setPassword] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [fileBuffer, setFileBuffer] = useState<ArrayBuffer | null>(null);
+  const [htmlContent, setHtmlContent] = useState('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -69,6 +80,11 @@ export const ToolsGrid: React.FC = () => {
     { title: "PDF to Excel", desc: "Convert PDF files to Microsoft Excel", icon: FileSpreadsheet, color: "text-green-600", bg: "bg-green-100", ext: ".xlsx" },
     { title: "PDF to PPT", desc: "Convert PDF files to PowerPoint", icon: FileOutput, color: "text-orange-600", bg: "bg-orange-100", ext: ".pptx" },
     { title: "PDF to Image", desc: "Convert pages to JPG, PNG or TIFF", icon: Image, color: "text-purple-600", bg: "bg-purple-100", ext: ".zip" },
+    { title: "Word to PDF", desc: "Convert Word documents to PDF", icon: FileText, color: "text-blue-600", bg: "bg-blue-100", ext: ".pdf" },
+    { title: "Excel to PDF", desc: "Convert Excel spreadsheets to PDF", icon: FileSpreadsheet, color: "text-green-600", bg: "bg-green-100", ext: ".pdf" },
+    { title: "PPT to PDF", desc: "Convert PowerPoint presentations to PDF", icon: FileOutput, color: "text-orange-600", bg: "bg-orange-100", ext: ".pdf" },
+    { title: "JPG to PDF", desc: "Convert Images to PDF", icon: Image, color: "text-purple-600", bg: "bg-purple-100", ext: ".pdf" },
+    { title: "HTML to PDF", desc: "Convert HTML files or content to PDF", icon: Globe, color: "text-pink-600", bg: "bg-pink-100", ext: ".pdf" },
     { title: "Merge PDF", desc: "Combine multiple PDFs into one", icon: Merge, color: "text-red-600", bg: "bg-red-100", ext: "_merged.pdf" },
     { title: "Split PDF", desc: "Separate one page or a whole set", icon: Split, color: "text-cyan-600", bg: "bg-cyan-100", ext: "_split.zip" },
     { title: "Compress PDF", desc: "Reduce file size while optimizing", icon: Scissors, color: "text-pink-600", bg: "bg-pink-100", ext: "_compressed.pdf" },
@@ -90,14 +106,40 @@ export const ToolsGrid: React.FC = () => {
     setPassword('');
     setFileBuffer(null);
     setValidationResult(null);
+    setHtmlContent('');
     if (downloadUrl) {
       URL.revokeObjectURL(downloadUrl);
       setDownloadUrl(null);
     }
+
+    if (tool.title === "HTML to PDF") {
+        setStatus('selecting_html_input');
+        return;
+    }
+
     // Small timeout to allow state to set before clicking input
     setTimeout(() => {
       fileInputRef.current?.click();
     }, 50);
+  };
+
+  const handleHtmlConvert = async () => {
+      if (!htmlContent) return;
+      setStatus('processing');
+      setFileName('content.pdf');
+      setProgress(20);
+      try {
+          const blob = await convertHTMLToPDF(htmlContent);
+          setResultBlob(blob);
+          const url = URL.createObjectURL(blob);
+          setDownloadUrl(url);
+          setStatus('success');
+          setProgress(100);
+      } catch (error) {
+          console.error(error);
+          setStatus('idle');
+          alert('HTML conversion failed');
+      }
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -193,6 +235,43 @@ export const ToolsGrid: React.FC = () => {
            setDownloadUrl(url);
            setStatus('success');
            setProgress(100);
+        } else if (activeTool.title === "Word to PDF") {
+            const blob = await convertWordToPDF(file);
+            setResultBlob(blob);
+            const url = URL.createObjectURL(blob);
+            setDownloadUrl(url);
+            setStatus('success');
+            setProgress(100);
+        } else if (activeTool.title === "Excel to PDF") {
+            const blob = await convertExcelToPDF(file);
+            setResultBlob(blob);
+            const url = URL.createObjectURL(blob);
+            setDownloadUrl(url);
+            setStatus('success');
+            setProgress(100);
+        } else if (activeTool.title === "PPT to PDF") {
+            const blob = await convertPPTToPDF(file);
+            setResultBlob(blob);
+            const url = URL.createObjectURL(blob);
+            setDownloadUrl(url);
+            setStatus('success');
+            setProgress(100);
+        } else if (activeTool.title === "JPG to PDF") {
+            const blob = await convertImageToPDF(file);
+            setResultBlob(blob);
+            const url = URL.createObjectURL(blob);
+            setDownloadUrl(url);
+            setStatus('success');
+            setProgress(100);
+        } else if (activeTool.title === "HTML to PDF") {
+            // HTML File upload path
+             const text = await file.text();
+             const blob = await convertHTMLToPDF(text);
+             setResultBlob(blob);
+             const url = URL.createObjectURL(blob);
+             setDownloadUrl(url);
+             setStatus('success');
+             setProgress(100);
         } else if (activeTool.title === "Compress PDF") {
            const blob = await compressPDF(file, (p) => setProgress(p));
            setResultBlob(blob);
@@ -339,6 +418,7 @@ export const ToolsGrid: React.FC = () => {
     setFileBuffer(null);
     setProcessedFileUrl(null);
     setValidationResult(null);
+    setHtmlContent('');
   };
 
   const handleDownload = () => {
@@ -440,7 +520,14 @@ export const ToolsGrid: React.FC = () => {
 
       <input 
         type="file" 
-        accept=".pdf" 
+        accept={
+            activeTool?.title === "JPG to PDF" ? "image/jpeg, image/jpg" :
+            activeTool?.title === "Word to PDF" ? ".docx, .doc" :
+            activeTool?.title === "Excel to PDF" ? ".xlsx, .xls" :
+            activeTool?.title === "PPT to PDF" ? ".pptx, .ppt" :
+            activeTool?.title === "HTML to PDF" ? ".html, .htm" :
+            ".pdf"
+        }
         className="hidden" 
         ref={fileInputRef}
         onChange={handleFileChange} 
@@ -490,6 +577,41 @@ export const ToolsGrid: React.FC = () => {
                      <X className="w-5 h-5" />
                    </button>
                 </div>
+
+                {status === 'selecting_html_input' && (
+                    <div className="text-center py-6">
+                        <h4 className="font-semibold text-slate-900 mb-4">Choose Input Method</h4>
+                        <div className="flex flex-col gap-3">
+                            <button
+                                onClick={() => fileInputRef.current?.click()}
+                                className="w-full bg-blue-100 text-blue-700 hover:bg-blue-200 py-3 rounded-xl font-medium transition-colors"
+                            >
+                                Upload HTML File
+                            </button>
+                            <div className="relative flex py-2 items-center">
+                                <div className="flex-grow border-t border-slate-200"></div>
+                                <span className="flex-shrink-0 mx-4 text-slate-400 text-sm">OR</span>
+                                <div className="flex-grow border-t border-slate-200"></div>
+                            </div>
+                            <div className="text-left">
+                                <label className="block text-sm font-medium text-slate-700 mb-2">Enter URL or Paste HTML</label>
+                                <textarea
+                                    className="w-full border border-slate-300 rounded-xl p-3 h-32 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm font-mono"
+                                    placeholder="<html>...</html> or https://..."
+                                    value={htmlContent}
+                                    onChange={(e) => setHtmlContent(e.target.value)}
+                                ></textarea>
+                            </div>
+                            <button
+                                onClick={handleHtmlConvert}
+                                disabled={!htmlContent.trim()}
+                                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white py-3 rounded-xl font-medium transition-colors"
+                            >
+                                Convert Content
+                            </button>
+                        </div>
+                    </div>
+                )}
 
                 {status === 'password' && (
                   <div className="text-center py-6">
