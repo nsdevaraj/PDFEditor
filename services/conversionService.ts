@@ -24,6 +24,8 @@ const getPDFDocument = async (file: File) => {
   return await loadingTask.promise;
 };
 
+const compareX = (a: TextItem, b: TextItem) => a.x - b.x;
+
 const extractRowsFromPage = async (page: any): Promise<TextItem[][]> => {
     const viewport = page.getViewport({ scale: 1.0 });
     const textContent = await page.getTextContent();
@@ -51,21 +53,30 @@ const extractRowsFromPage = async (page: any): Promise<TextItem[][]> => {
 
     let currentRow: TextItem[] = [];
     let currentY = -1;
+    let isRowSorted = true;
 
     for (const item of items) {
       if (currentY === -1 || Math.abs(item.y - currentY) <= TOLERANCE) {
+        if (currentRow.length > 0 && item.x < currentRow[currentRow.length - 1].x) {
+          isRowSorted = false;
+        }
         currentRow.push(item);
         if (currentY === -1) currentY = item.y;
       } else {
-        // Sort current row by X
-        currentRow.sort((a, b) => a.x - b.x);
+        // Sort current row by X if needed
+        if (!isRowSorted) {
+          currentRow.sort(compareX);
+        }
         rows.push(currentRow);
         currentRow = [item];
         currentY = item.y;
+        isRowSorted = true;
       }
     }
     if (currentRow.length > 0) {
-      currentRow.sort((a, b) => a.x - b.x);
+      if (!isRowSorted) {
+        currentRow.sort(compareX);
+      }
       rows.push(currentRow);
     }
 
