@@ -19,12 +19,22 @@ import {
   CheckCircle,
   Loader2,
   Download,
-  ArrowRight
+  ArrowRight,
+  RotateCw,
+  ArrowLeftRight,
+  Hash,
+  Crop,
+  Wrench
 } from 'lucide-react';
 import { compressPDF } from '../services/pdfService';
+import { repairPDF } from '../services/repairService';
 import { convertPDFToExcel, convertPDFToPPT, convertPDFToWord } from '../services/conversionService';
 import { UploadedFile } from '../types';
 import { SplitPDF } from './SplitPDF';
+import { RotatePDF } from './RotatePDF';
+import { OrganizePDF } from './OrganizePDF';
+import { PageNumbersPDF } from './PageNumbersPDF';
+import { CropPDF } from './CropPDF';
 import { convertPdfToImages } from '../utils/pdfConverter';
 import { performOCR } from '../services/ocrService';
 
@@ -50,6 +60,11 @@ export const ToolsGrid: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const tools = [
+    { title: "Rotate PDF", desc: "Rotate pages left or right", icon: RotateCw, color: "text-blue-600", bg: "bg-blue-100", ext: "_rotated.pdf" },
+    { title: "Organize PDF", desc: "Sort and reorder pages", icon: ArrowLeftRight, color: "text-purple-600", bg: "bg-purple-100", ext: "_organized.pdf" },
+    { title: "Page Numbers", desc: "Add page numbers to document", icon: Hash, color: "text-green-600", bg: "bg-green-100", ext: "_numbered.pdf" },
+    { title: "Crop PDF", desc: "Trim margins and crop pages", icon: Crop, color: "text-orange-600", bg: "bg-orange-100", ext: "_cropped.pdf" },
+    { title: "Repair PDF", desc: "Fix corrupted or damaged files", icon: Wrench, color: "text-red-600", bg: "bg-red-100", ext: "_repaired.pdf" },
     { title: "PDF to Word", desc: "Convert PDF files to Microsoft Word", icon: FileText, color: "text-blue-600", bg: "bg-blue-100", ext: ".docx" },
     { title: "PDF to Excel", desc: "Convert PDF files to Microsoft Excel", icon: FileSpreadsheet, color: "text-green-600", bg: "bg-green-100", ext: ".xlsx" },
     { title: "PDF to PPT", desc: "Convert PDF files to PowerPoint", icon: FileOutput, color: "text-orange-600", bg: "bg-orange-100", ext: ".pptx" },
@@ -99,28 +114,28 @@ export const ToolsGrid: React.FC = () => {
         setStatus('password');
       } else { 
 
-        // Simulate processing progress
-      if (activeTool?.title === "Split PDF") {
-        const fileUrl = URL.createObjectURL(file);
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          if (event.target?.result) {
-            const fullBase64 = event.target.result as string;
-            const content = fullBase64.split(',')[1];
-            setCurrentFile({
-              name: file.name,
-              type: file.type,
-              size: file.size,
-              dataUrl: fullBase64,
-              content: content,
-              lastModified: file.lastModified,
-              fileUrl: fileUrl
-            });
-          }
-        };
-        reader.readAsDataURL(file);
-        return;
-      }
+        // Components that need the file loaded first
+        if (['Split PDF', 'Rotate PDF', 'Organize PDF', 'Page Numbers', 'Crop PDF'].includes(activeTool?.title)) {
+            const fileUrl = URL.createObjectURL(file);
+            const reader = new FileReader();
+            reader.onload = (event) => {
+            if (event.target?.result) {
+                const fullBase64 = event.target.result as string;
+                const content = fullBase64.split(',')[1];
+                setCurrentFile({
+                name: file.name,
+                type: file.type,
+                size: file.size,
+                dataUrl: fullBase64,
+                content: content,
+                lastModified: file.lastModified,
+                fileUrl: fileUrl
+                });
+            }
+            };
+            reader.readAsDataURL(file);
+            return;
+        }
 
       if (activeTool && activeTool.title === "PDF to Image") {
         setStatus('configuring');
@@ -184,6 +199,13 @@ export const ToolsGrid: React.FC = () => {
            const url = URL.createObjectURL(blob);
            setDownloadUrl(url);
            setStatus('success');
+        } else if (activeTool.title === "Repair PDF") {
+           const blob = await repairPDF(file);
+           setResultBlob(blob);
+           const url = URL.createObjectURL(blob);
+           setDownloadUrl(url);
+           setStatus('success');
+           setProgress(100);
         } else if (activeTool.title === 'OCR') {
            const blob = await performOCR(file, (p) => setProgress(p));
            setResultBlob(blob);
@@ -386,6 +408,18 @@ export const ToolsGrid: React.FC = () => {
 
   if (activeTool?.title === "Split PDF" && currentFile) {
     return <SplitPDF file={currentFile} onClose={handleClose} />;
+  }
+  if (activeTool?.title === "Rotate PDF" && currentFile) {
+    return <RotatePDF file={currentFile} onClose={handleClose} />;
+  }
+  if (activeTool?.title === "Organize PDF" && currentFile) {
+    return <OrganizePDF file={currentFile} onClose={handleClose} />;
+  }
+  if (activeTool?.title === "Page Numbers" && currentFile) {
+    return <PageNumbersPDF file={currentFile} onClose={handleClose} />;
+  }
+  if (activeTool?.title === "Crop PDF" && currentFile) {
+    return <CropPDF file={currentFile} onClose={handleClose} />;
   }
 
   return (
