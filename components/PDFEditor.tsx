@@ -32,7 +32,7 @@ interface PDFEditorProps {
   onClose: () => void;
 }
 
-type ToolType = 'none' | 'eraser';
+type ToolType = 'none' | 'eraser' | 'text' | 'signature' | 'highlight' | 'redact';
 
 interface EditorElement {
   id: string;
@@ -57,6 +57,7 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
   const [elements, setElements] = useState<EditorElement[]>([]);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [lastCreatedElementId, setLastCreatedElementId] = useState<string | null>(null);
 
   const [pdfDoc, setPdfDoc] = useState<any>(null);
   const [isRendering, setIsRendering] = useState(false);
@@ -153,18 +154,33 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
 
   // --- Tool & Drag Logic ---
 
-  const addElementCentered = (type: 'text' | 'signature' | 'highlight' | 'redact') => {
-      if (!canvasRef.current) return;
-      
-      // Calculate center in PDF coordinates (unscaled)
-      const viewportWidth = canvasRef.current.width / scale;
-      const viewportHeight = canvasRef.current.height / scale;
+  // Auto-focus new text elements
+  useEffect(() => {
+    if (lastCreatedElementId) {
+      const el = elements.find(e => e.id === lastCreatedElementId);
+      if (el && el.type === 'text') {
+        const domEl = document.getElementById(`text-input-${el.id}`);
+        if (domEl) {
+          domEl.focus();
+          // Place cursor at end
+          const range = document.createRange();
+          const sel = window.getSelection();
+          range.selectNodeContents(domEl);
+          range.collapse(false);
+          sel?.removeAllRanges();
+          sel?.addRange(range);
+        }
+      }
+      setLastCreatedElementId(null);
+    }
+  }, [lastCreatedElementId, elements]);
 
+  const addElement = (type: 'text' | 'signature' | 'highlight' | 'redact', x: number, y: number) => {
       const newElement: EditorElement = {
           id: Date.now().toString(),
           type,
-          x: (viewportWidth / 2) - (type === 'text' ? 50 : type === 'signature' ? 60 : 100),
-          y: (viewportHeight / 2) - 20,
+          x,
+          y,
           page: currentPage,
           content: type === 'text' ? 'Type here...' : type === 'signature' ? 'Alex. L' : undefined,
           width: (type === 'highlight' || type === 'redact') ? 200 : undefined,
@@ -172,11 +188,20 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
       };
       
       setElements(prev => [...prev, newElement]);
-      setActiveTool('none');
+      setLastCreatedElementId(newElement.id);
+
+      // Optional: Reset tool after one use if desired. For form filling, keeping it active is often better.
+      // setActiveTool('none');
   };
 
   const handleCanvasClick = (e: React.MouseEvent) => {
-      // Logic for click-to-place could go here if we wanted mixed modes
+      if (activeTool === 'none' || activeTool === 'eraser' || !containerRef.current) return;
+
+      const containerRect = containerRef.current.getBoundingClientRect();
+      const x = (e.clientX - containerRect.left) / scale;
+      const y = (e.clientY - containerRect.top) / scale;
+
+      addElement(activeTool, x, y);
   };
 
   const handleElementMouseDown = (e: React.MouseEvent, id: string) => {
@@ -327,29 +352,29 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
         <div className="flex items-center space-x-4 min-w-max px-4">
              <div className="flex items-center space-x-1 border-r border-slate-200 pr-4">
                 <button 
-                    onClick={() => addElementCentered('signature')}
-                    className="p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                    onClick={() => setActiveTool(activeTool === 'signature' ? 'none' : 'signature')}
+                    className={`p-2 rounded-lg transition-colors ${activeTool === 'signature' ? 'bg-blue-100 text-blue-600' : 'text-slate-500 hover:bg-slate-100'}`}
                     title="Sign Document"
                 >
                     <FileSignature className="w-5 h-5" />
                 </button>
                 <button 
-                    onClick={() => addElementCentered('text')}
-                    className="p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                    onClick={() => setActiveTool(activeTool === 'text' ? 'none' : 'text')}
+                    className={`p-2 rounded-lg transition-colors ${activeTool === 'text' ? 'bg-blue-100 text-blue-600' : 'text-slate-500 hover:bg-slate-100'}`}
                     title="Add Text"
                 >
                     <Type className="w-5 h-5" />
                 </button>
                 <button 
-                    onClick={() => addElementCentered('highlight')}
-                    className="p-2 text-slate-500 hover:text-yellow-600 hover:bg-yellow-50 rounded-lg transition-colors"
+                    onClick={() => setActiveTool(activeTool === 'highlight' ? 'none' : 'highlight')}
+                    className={`p-2 rounded-lg transition-colors ${activeTool === 'highlight' ? 'bg-yellow-100 text-yellow-600' : 'text-slate-500 hover:bg-slate-100'}`}
                     title="Highlight"
                 >
                     <Highlighter className="w-5 h-5" />
                 </button>
                 <button
-                    onClick={() => addElementCentered('redact')}
-                    className="p-2 text-slate-500 hover:text-slate-900 hover:bg-slate-200 rounded-lg transition-colors"
+                    onClick={() => setActiveTool(activeTool === 'redact' ? 'none' : 'redact')}
+                    className={`p-2 rounded-lg transition-colors ${activeTool === 'redact' ? 'bg-slate-200 text-slate-900' : 'text-slate-500 hover:bg-slate-100'}`}
                     title="Redact (Permanently hide content)"
                 >
                     <EyeOff className="w-5 h-5" />
@@ -382,11 +407,12 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
         <div className="flex-1 bg-slate-200 overflow-auto flex justify-center p-8 relative">
             <div 
                 ref={containerRef}
+                onClick={handleCanvasClick}
                 className="bg-white shadow-2xl transition-transform duration-75 ease-out origin-top relative"
                 style={{ 
                     minHeight: '400px',
                     minWidth: '300px',
-                    cursor: activeTool === 'eraser' ? 'crosshair' : 'default'
+                    cursor: activeTool === 'eraser' || activeTool === 'text' || activeTool === 'highlight' || activeTool === 'redact' || activeTool === 'signature' ? 'crosshair' : 'default'
                 }}
             >
                 {isRendering && !pdfDoc && (
@@ -454,6 +480,7 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
                        {el.type === 'text' && (
                             <div className="group relative">
                                 <div 
+                                    id={`text-input-${el.id}`}
                                     contentEditable={activeTool !== 'eraser'}
                                     suppressContentEditableWarning
                                     onBlur={(e) => updateElementContent(el.id, e.currentTarget.innerText)}
