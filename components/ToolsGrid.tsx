@@ -25,9 +25,11 @@ import {
   Hash,
   Crop,
   Wrench,
-  Globe
+  Globe,
+  Layers,
+  Camera
 } from 'lucide-react';
-import { compressPDF } from '../services/pdfService';
+import { compressPDF, flattenPDF } from '../services/pdfService';
 import { repairPDF } from '../services/repairService';
 import {
   convertPDFToExcel,
@@ -41,6 +43,7 @@ import {
 } from '../services/conversionService';
 import { UploadedFile } from '../types';
 import { SplitPDF } from './SplitPDF';
+import { ScanPDF } from './ScanPDF';
 import { RotatePDF } from './RotatePDF';
 import { OrganizePDF } from './OrganizePDF';
 import { PageNumbersPDF } from './PageNumbersPDF';
@@ -93,6 +96,9 @@ export const ToolsGrid: React.FC = () => {
     { title: "Redact", desc: "Permanently remove sensitive info", icon: Eraser, color: "text-gray-600", bg: "bg-gray-100", ext: "_redacted.pdf" },
     { title: "OCR", desc: "Make scanned documents searchable", icon: Eye, color: "text-yellow-600", bg: "bg-yellow-100", ext: "_ocr.pdf" },
     { title: "Validate PDF/A", desc: "Check compliance with ISO standards", icon: FileCheck, color: "text-emerald-600", bg: "bg-emerald-100", ext: "_report.txt" },
+    { title: "Extract PDF Pages", desc: "Extract specific pages from PDF", icon: FileText, color: "text-cyan-600", bg: "bg-cyan-100", ext: "_extracted.pdf" },
+    { title: "Flatten PDF", desc: "Make your PDF uneditable", icon: Layers, color: "text-purple-600", bg: "bg-purple-100", ext: "_flattened.pdf" },
+    { title: "Scan to PDF", desc: "Capture document scans from mobile", icon: Camera, color: "text-blue-600", bg: "bg-blue-100", ext: ".pdf" },
   ];
 
   const handleToolClick = (tool: any) => {
@@ -114,6 +120,11 @@ export const ToolsGrid: React.FC = () => {
 
     if (tool.title === "HTML to PDF") {
         setStatus('selecting_html_input');
+        return;
+    }
+
+    if (tool.title === "Scan to PDF") {
+        // No file input needed for scanning
         return;
     }
 
@@ -157,7 +168,7 @@ export const ToolsGrid: React.FC = () => {
       } else { 
 
         // Components that need the file loaded first
-        if (['Split PDF', 'Rotate PDF', 'Organize PDF', 'Page Numbers', 'Crop PDF'].includes(activeTool?.title)) {
+        if (['Split PDF', 'Rotate PDF', 'Organize PDF', 'Page Numbers', 'Crop PDF', 'Extract PDF Pages'].includes(activeTool?.title)) {
             const fileUrl = URL.createObjectURL(file);
             const reader = new FileReader();
             reader.onload = (event) => {
@@ -274,6 +285,12 @@ export const ToolsGrid: React.FC = () => {
              setProgress(100);
         } else if (activeTool.title === "Compress PDF") {
            const blob = await compressPDF(file, (p) => setProgress(p));
+           setResultBlob(blob);
+           const url = URL.createObjectURL(blob);
+           setDownloadUrl(url);
+           setStatus('success');
+        } else if (activeTool.title === "Flatten PDF") {
+           const blob = await flattenPDF(file, (p) => setProgress(p));
            setResultBlob(blob);
            const url = URL.createObjectURL(blob);
            setDownloadUrl(url);
@@ -497,6 +514,12 @@ export const ToolsGrid: React.FC = () => {
 
   if (activeTool?.title === "Split PDF" && currentFile) {
     return <SplitPDF file={currentFile} onClose={handleClose} />;
+  }
+  if (activeTool?.title === "Extract PDF Pages" && currentFile) {
+    return <SplitPDF file={currentFile} onClose={handleClose} title="Extract Pages" actionLabel="Extract Pages" />;
+  }
+  if (activeTool?.title === "Scan to PDF") {
+    return <ScanPDF onClose={handleClose} />;
   }
   if (activeTool?.title === "Rotate PDF" && currentFile) {
     return <RotatePDF file={currentFile} onClose={handleClose} />;

@@ -21,6 +21,8 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = `https://esm.sh/pdfjs-dist@4.0.379/buil
 interface SplitPDFProps {
   file: UploadedFile;
   onClose: () => void;
+  title?: string;
+  actionLabel?: string;
 }
 
 interface PageThumbnail {
@@ -29,7 +31,12 @@ interface PageThumbnail {
   dataUrl: string;
 }
 
-export const SplitPDF: React.FC<SplitPDFProps> = ({ file, onClose }) => {
+export const SplitPDF: React.FC<SplitPDFProps> = ({
+  file,
+  onClose,
+  title = "Split PDF",
+  actionLabel = "Split PDF"
+}) => {
   const [thumbnails, setThumbnails] = useState<PageThumbnail[]>([]);
   const [selectedPages, setSelectedPages] = useState<Set<number>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
@@ -170,7 +177,8 @@ export const SplitPDF: React.FC<SplitPDFProps> = ({ file, onClose }) => {
 
       // Create blob and download
       const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-      const newFileName = file.name.replace('.pdf', '_split.pdf');
+      const suffix = title.toLowerCase().includes('extract') ? '_extracted.pdf' : '_split.pdf';
+      const newFileName = file.name.replace('.pdf', suffix);
       saveAs(blob, newFileName);
 
       setIsProcessing(false);
@@ -179,7 +187,7 @@ export const SplitPDF: React.FC<SplitPDFProps> = ({ file, onClose }) => {
     } catch (error) {
       console.error("Error splitting PDF:", error);
       setIsProcessing(false);
-      alert("Failed to split PDF. Please try again.");
+      alert("Failed to process PDF. Please try again.");
     }
   };
 
@@ -191,7 +199,7 @@ export const SplitPDF: React.FC<SplitPDFProps> = ({ file, onClose }) => {
                 <Split className="w-6 h-6 text-cyan-600" />
              </div>
              <div>
-               <h2 className="text-xl font-bold text-slate-900">Split PDF</h2>
+               <h2 className="text-xl font-bold text-slate-900">{title}</h2>
                <p className="text-sm text-slate-500">{file.name}</p>
              </div>
           </div>
@@ -306,7 +314,7 @@ export const SplitPDF: React.FC<SplitPDFProps> = ({ file, onClose }) => {
                    <Loader2 className="w-6 h-6 animate-spin" />
                 ) : (
                    <>
-                     <span>Split PDF</span>
+                     <span>{actionLabel}</span>
                      <ArrowRight className="w-5 h-5" />
                    </>
                 )}
