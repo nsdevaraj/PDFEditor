@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { PDFDocument } from 'pdf-lib';
+import { encryptPDF } from '@pdfsmaller/pdf-encrypt-lite';
 import { validatePDFCompliance } from '../services/geminiService';
 import { 
   FileText, 
@@ -239,22 +240,12 @@ export const ToolsGrid: React.FC = () => {
 
     try {
       const arrayBuffer = await selectedFile.arrayBuffer();
-      const pdfDoc = await PDFDocument.load(arrayBuffer);
-      pdfDoc.encrypt({
-        userPassword: password,
-        ownerPassword: password,
-        permissions: {
-          printing: 'highResolution',
-          modifying: false,
-          copying: false,
-          annotating: false,
-          fillingForms: false,
-          contentAccessibility: false,
-          documentAssembly: false,
-        },
-      });
-      const pdfBytes = await pdfDoc.save();
-      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+      const pdfBytes = new Uint8Array(arrayBuffer);
+
+      // Use @pdfsmaller/pdf-encrypt-lite for encryption
+      const encryptedBytes = await encryptPDF(pdfBytes, password, password);
+
+      const blob = new Blob([encryptedBytes], { type: 'application/pdf' });
       setProcessedFile(blob);
       setProgress(100);
       setStatus('success');
