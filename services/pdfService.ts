@@ -20,6 +20,10 @@ export const compressPDF = async (
 
         let pdfDoc: jsPDF | null = null;
 
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        if (!context) throw new Error('Canvas context not available');
+
         for (let i = 1; i <= totalPages; i++) {
             const page = await pdf.getPage(i);
 
@@ -27,12 +31,8 @@ export const compressPDF = async (
             const renderScale = 1.5;
             const viewport = page.getViewport({ scale: renderScale });
 
-            const canvas = document.createElement('canvas');
             canvas.width = viewport.width;
             canvas.height = viewport.height;
-
-            const context = canvas.getContext('2d');
-            if (!context) throw new Error('Canvas context not available');
 
             await page.render({ canvasContext: context, viewport }).promise;
 
@@ -90,6 +90,10 @@ export const flattenPDF = async (
 
         let pdfDoc: jsPDF | null = null;
 
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        if (!context) throw new Error('Canvas context not available');
+
         for (let i = 1; i <= totalPages; i++) {
             const page = await pdf.getPage(i);
 
@@ -97,12 +101,8 @@ export const flattenPDF = async (
             const renderScale = 2.0;
             const viewport = page.getViewport({ scale: renderScale });
 
-            const canvas = document.createElement('canvas');
             canvas.width = viewport.width;
             canvas.height = viewport.height;
-
-            const context = canvas.getContext('2d');
-            if (!context) throw new Error('Canvas context not available');
 
             await page.render({ canvasContext: context, viewport }).promise;
 
