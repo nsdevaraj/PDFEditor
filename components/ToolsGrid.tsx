@@ -48,6 +48,7 @@ import { RotatePDF } from './RotatePDF';
 import { OrganizePDF } from './OrganizePDF';
 import { PageNumbersPDF } from './PageNumbersPDF';
 import { CropPDF } from './CropPDF';
+import { ComparePDF } from './ComparePDF';
 import { convertPdfToImages } from '../utils/pdfConverter';
 import { performOCR } from '../services/ocrService';
 
@@ -74,6 +75,7 @@ export const ToolsGrid: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const tools = [
+    { title: "Compare PDF", desc: "Overlay and compare two PDF files", icon: Layers, color: "text-indigo-600", bg: "bg-indigo-100", ext: "" },
     { title: "Rotate PDF", desc: "Rotate pages left or right", icon: RotateCw, color: "text-blue-600", bg: "bg-blue-100", ext: "_rotated.pdf" },
     { title: "Organize PDF", desc: "Sort and reorder pages", icon: ArrowLeftRight, color: "text-purple-600", bg: "bg-purple-100", ext: "_organized.pdf" },
     { title: "Page Numbers", desc: "Add page numbers to document", icon: Hash, color: "text-green-600", bg: "bg-green-100", ext: "_numbered.pdf" },
@@ -168,7 +170,7 @@ export const ToolsGrid: React.FC = () => {
       } else { 
 
         // Components that need the file loaded first
-        if (['Split PDF', 'Rotate PDF', 'Organize PDF', 'Page Numbers', 'Crop PDF', 'Extract PDF Pages'].includes(activeTool?.title)) {
+        if (['Split PDF', 'Rotate PDF', 'Organize PDF', 'Page Numbers', 'Crop PDF',  'Compare PDF', 'Extract PDF Pages'].includes(activeTool?.title)) {
             const fileUrl = URL.createObjectURL(file);
             const reader = new FileReader();
             reader.onload = (event) => {
@@ -532,6 +534,9 @@ export const ToolsGrid: React.FC = () => {
   }
   if (activeTool?.title === "Crop PDF" && currentFile) {
     return <CropPDF file={currentFile} onClose={handleClose} />;
+  }
+  if (activeTool?.title === "Compare PDF" && currentFile) {
+    return <ComparePDF file={currentFile} onClose={handleClose} />;
   }
 
   return (
