@@ -19,6 +19,9 @@ export const compressPDF = async (
         const totalPages = pdf.numPages;
 
         let pdfDoc: jsPDF | null = null;
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        if (!context) throw new Error('Canvas context not available');
 
         for (let i = 1; i <= totalPages; i++) {
             const page = await pdf.getPage(i);
@@ -27,17 +30,20 @@ export const compressPDF = async (
             const renderScale = 1.5;
             const viewport = page.getViewport({ scale: renderScale });
 
-            const canvas = document.createElement('canvas');
             canvas.width = viewport.width;
             canvas.height = viewport.height;
-
-            const context = canvas.getContext('2d');
-            if (!context) throw new Error('Canvas context not available');
 
             await page.render({ canvasContext: context, viewport }).promise;
 
             // Compress to JPEG with 0.5 quality
-            const imgData = canvas.toDataURL('image/jpeg', 0.5);
+            const blob = await new Promise<Blob | null>((resolve) =>
+                canvas.toBlob(resolve, 'image/jpeg', 0.5)
+            );
+
+            if (!blob) throw new Error('Compression failed');
+
+            const buffer = await blob.arrayBuffer();
+            const imgData = new Uint8Array(buffer);
 
             // Calculate original page dimensions in points
             const pdfPageWidth = viewport.width / renderScale;
@@ -57,6 +63,9 @@ export const compressPDF = async (
 
             // Add image to the PDF page
             pdfDoc.addImage(imgData, 'JPEG', 0, 0, pdfPageWidth, pdfPageHeight, undefined, 'FAST');
+
+            // Release page resources
+            page.cleanup();
 
             onProgress((i / totalPages) * 100);
         }
