@@ -76,7 +76,10 @@ export const performOCR = async (
           const h = (line.bbox.y1 - line.bbox.y0) / scale;
 
           doc.setFontSize(h);
+      doc.setTextColor(255, 255, 255); // Fallback to white text
           // renderingMode: 'invisible' makes text selectable but not visible
+      // Note: 'invisible' rendering mode might not be supported in all jsPDF versions,
+      // so we also set color to white.
           doc.text(line.text, x, y, { renderingMode: 'invisible' });
       }
 

@@ -5,7 +5,7 @@ import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 // We assume process.env.API_KEY is available as per instructions.
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
 
-const MODEL_NAME = 'gemini-3-flash-preview';
+const MODEL_NAME = 'gemini-1.5-flash';
 
 export const analyzeDocument = async (
   prompt: string,
