@@ -348,6 +348,7 @@ export const ToolsGrid: React.FC = () => {
 
       const blob = new Blob([encryptedBytes], { type: 'application/pdf' });
       setProcessedFile(blob);
+      setResultBlob(blob);
       setProgress(100);
       setStatus('success');
     } catch (error) {
@@ -437,11 +438,16 @@ export const ToolsGrid: React.FC = () => {
     let isTempUrl = false;
 
     if (!url) {
-        // Create a dummy file for download
-        const content = `This is a simulated converted file for: ${fileName}.\nTool Used: ${activeTool.title}\nTimestamp: ${new Date().toISOString()}`;
-        const blob = new Blob([content], { type: 'text/plain' });
-        url = URL.createObjectURL(blob);
-        isTempUrl = true;
+        if (processedFile) {
+            url = URL.createObjectURL(processedFile);
+            isTempUrl = true;
+        } else {
+            // Create a dummy file for download
+            const content = `This is a simulated converted file for: ${fileName}.\nTool Used: ${activeTool.title}\nTimestamp: ${new Date().toISOString()}`;
+            const blob = new Blob([content], { type: 'text/plain' });
+            url = URL.createObjectURL(blob);
+            isTempUrl = true;
+        }
     }
 
     if (activeTool.title === "Validate PDF/A" && validationResult) {
@@ -473,14 +479,17 @@ export const ToolsGrid: React.FC = () => {
        return;
     }
 
-    if (downloadUrl) {
+    if (url) {
         const link = document.createElement('a');
-        link.href = downloadUrl;
+        link.href = url;
         const originalName = fileName.replace(/\.pdf$/i, '');
         link.download = `${originalName}${activeTool.ext}`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        if (isTempUrl) {
+            setTimeout(() => URL.revokeObjectURL(url), 100);
+        }
         handleClose();
         return;
     }
