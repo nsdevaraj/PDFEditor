@@ -19,36 +19,54 @@ export const compressPDF = async (
         const totalPages = pdf.numPages;
 
         let pdfDoc: jsPDF | null = null;
-        const canvas = document.createElement('canvas');
-        const context = canvas.getContext('2d');
-        if (!context) throw new Error('Canvas context not available');
 
-        const canvas = document.createElement('canvas');
-        const context = canvas.getContext('2d');
-        if (!context) throw new Error('Canvas context not available');
+        // Parallel processing setup
+        const concurrency = 4;
+        let currentIndex = 1;
+        let completedCount = 0;
+        const pagesData = new Array(totalPages);
 
-        for (let i = 1; i <= totalPages; i++) {
-            const page = await pdf.getPage(i);
+        const worker = async () => {
+             const canvas = document.createElement('canvas');
+             const context = canvas.getContext('2d');
+             if (!context) throw new Error('Canvas context not available');
 
-            // Render at 1.5 scale for reasonable quality before compression
-            const renderScale = 1.5;
-            const viewport = page.getViewport({ scale: renderScale });
+             while (currentIndex <= totalPages) {
+                 const i = currentIndex++;
 
-            canvas.width = viewport.width;
-            canvas.height = viewport.height;
+                 const page = await pdf.getPage(i);
+                 // Render at 1.5 scale for reasonable quality before compression
+                 const renderScale = 1.5;
+                 const viewport = page.getViewport({ scale: renderScale });
 
-            await page.render({ canvasContext: context, viewport }).promise;
+                 canvas.width = viewport.width;
+                 canvas.height = viewport.height;
 
-            // Compress to JPEG with 0.5 quality
-            const imgData = canvas.toDataURL('image/jpeg', 0.5);
+                 await page.render({ canvasContext: context, viewport }).promise;
 
-            // Calculate original page dimensions in points
-            const pdfPageWidth = viewport.width / renderScale;
-            const pdfPageHeight = viewport.height / renderScale;
+                 // Compress to JPEG with 0.5 quality
+                 const imgData = canvas.toDataURL('image/jpeg', 0.5);
 
-            const orientation = pdfPageWidth > pdfPageHeight ? 'l' : 'p';
+                 // Calculate original page dimensions in points
+                 const pdfPageWidth = viewport.width / renderScale;
+                 const pdfPageHeight = viewport.height / renderScale;
+                 const orientation = pdfPageWidth > pdfPageHeight ? 'l' : 'p';
 
-            if (!pdfDoc) {
+                 pagesData[i - 1] = { imgData, pdfPageWidth, pdfPageHeight, orientation };
+
+                 completedCount++;
+                 onProgress((completedCount / totalPages) * 100);
+             }
+        };
+
+        // Run workers
+        await Promise.all(Array.from({ length: Math.min(concurrency, totalPages) }, worker));
+
+        // Assemble PDF sequentially to ensure order
+        for (const pageData of pagesData) {
+            if (!pageData) continue;
+            const { imgData, pdfPageWidth, pdfPageHeight, orientation } = pageData;
+             if (!pdfDoc) {
                 pdfDoc = new jsPDF({
                     orientation: orientation,
                     unit: 'pt',
@@ -57,11 +75,7 @@ export const compressPDF = async (
             } else {
                 pdfDoc.addPage([pdfPageWidth, pdfPageHeight], orientation);
             }
-
-            // Add image to the PDF page
             pdfDoc.addImage(imgData, 'JPEG', 0, 0, pdfPageWidth, pdfPageHeight, undefined, 'FAST');
-
-            onProgress((i / totalPages) * 100);
         }
 
         if (pdfDoc) {
@@ -92,10 +106,6 @@ export const flattenPDF = async (
         const totalPages = pdf.numPages;
 
         let pdfDoc: jsPDF | null = null;
-        const canvas = document.createElement('canvas');
-        const context = canvas.getContext('2d');
-        if (!context) throw new Error('Canvas context not available');
-
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d');
         if (!context) throw new Error('Canvas context not available');
