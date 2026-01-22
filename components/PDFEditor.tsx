@@ -277,23 +277,23 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
 
   return (
     <div 
-      className="flex h-screen w-full bg-slate-100 overflow-hidden relative" 
+      className="flex h-full w-full bg-slate-100 overflow-hidden relative"
       onMouseUp={handleMouseUp} 
       onMouseMove={handleMouseMove}
     >
       {/* Top Bar */}
-      <div className="absolute top-0 left-0 right-0 h-16 bg-white shadow-sm flex items-center justify-between px-4 z-10 border-b border-slate-200">
-        <div className="flex items-center space-x-3">
+      <div className="absolute top-0 left-0 right-0 h-16 bg-white shadow-sm flex items-center justify-between px-4 z-10 border-b border-slate-200 overflow-x-auto overflow-y-hidden">
+        <div className="flex items-center space-x-3 min-w-max">
             <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg text-slate-500">
                 <X className="w-5 h-5" />
             </button>
             <div className="flex items-center space-x-2">
                 <FileText className="w-5 h-5 text-blue-600" />
-                <span className="font-semibold text-slate-800 truncate max-w-[200px]">{file.name}</span>
+                <span className="font-semibold text-slate-800 truncate max-w-[150px] md:max-w-[200px]">{file.name}</span>
             </div>
         </div>
 
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center space-x-4 min-w-max px-4">
              {/* Pagination */}
              {numPages > 0 && (
                  <div className="flex items-center space-x-2 bg-slate-100 rounded-lg p-1 mr-2">
@@ -324,7 +324,7 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
             </div>
         </div>
 
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center space-x-4 min-w-max px-4">
              <div className="flex items-center space-x-1 border-r border-slate-200 pr-4">
                 <button 
                     onClick={() => addElementCentered('signature')}
@@ -377,7 +377,7 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex mt-16 h-[calc(100vh-64px)]">
+      <div className="flex-1 flex mt-16 h-[calc(100%-64px)] relative">
         {/* PDF Viewer Canvas */}
         <div className="flex-1 bg-slate-200 overflow-auto flex justify-center p-8 relative">
             <div 
@@ -503,7 +503,7 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
         </div>
 
         {/* AI Assistant Sidebar */}
-        <div className={`${isChatOpen ? 'w-96' : 'w-0'} bg-white border-l border-slate-200 transition-all duration-300 flex flex-col relative z-30`}>
+        <div className={`${isChatOpen ? 'w-full md:w-96' : 'w-0'} absolute md:relative right-0 h-full bg-white border-l border-slate-200 transition-all duration-300 flex flex-col z-30`}>
             {/* ... Chat Interface ... */}
             <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0">
                 <div className="flex items-center space-x-2 text-blue-600">
