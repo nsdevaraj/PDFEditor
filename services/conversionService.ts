@@ -87,16 +87,25 @@ export const convertPDFToExcel = async (file: File): Promise<Blob> => {
   const pdf = await getPDFDocument(file);
   const wb = XLSX.utils.book_new();
 
+  const pagePromises = [];
   for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-    const page = await pdf.getPage(pageNum);
-    const rows = await extractRowsFromPage(page);
+    pagePromises.push((async () => {
+      const page = await pdf.getPage(pageNum);
+      const rows = await extractRowsFromPage(page);
+      return rows;
+    })());
+  }
 
+  const allPageRows = await Promise.all(pagePromises);
+
+  allPageRows.forEach((rows, index) => {
+    const pageNum = index + 1;
     // Convert to array of arrays for XLSX
     const sheetData: string[][] = rows.map(row => row.map(item => item.str));
 
     const ws = XLSX.utils.aoa_to_sheet(sheetData);
     XLSX.utils.book_append_sheet(wb, ws, `Page ${pageNum}`);
-  }
+  });
 
   // Write to blob
   const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
