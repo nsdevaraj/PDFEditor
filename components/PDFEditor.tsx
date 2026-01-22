@@ -271,7 +271,25 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
       if (!canvasRef.current) return;
       const viewportWidth = canvasRef.current.width / scale;
       const viewportHeight = canvasRef.current.height / scale;
-  }
+
+      const newElement: EditorElement = {
+          id: Date.now().toString(),
+          type,
+          x: (viewportWidth / 2) - (type === 'text' ? 50 : 60),
+          y: (viewportHeight / 2) - 20,
+          page: currentPage,
+          content: type === 'text' ? 'Type here...' : 'Alex. L',
+          width: undefined,
+          height: undefined,
+      };
+
+      const newElements = [...elements, newElement];
+      setElements(newElements);
+      setLastCreatedElementId(newElement.id);
+      addToHistory(newElements);
+      setActiveTool('select');
+  };
+
   // Auto-focus new text elements
   useEffect(() => {
     if (lastCreatedElementId) {
@@ -297,12 +315,12 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
       const newElement: EditorElement = {
           id: Date.now().toString(),
           type,
-          x: (viewportWidth / 2) - (type === 'text' ? 50 : 60),
-          y: (viewportHeight / 2) - 20,
+          x,
+          y,
           page: currentPage,
           content: type === 'text' ? 'Type here...' : 'Alex. L',
-          width: undefined,
-          height: undefined,
+          width: type === 'text' || type === 'signature' ? undefined : 100,
+          height: type === 'text' || type === 'signature' ? undefined : 50,
       };
       
       const newElements = [...elements, newElement];
@@ -717,6 +735,7 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
                     title="Hand Tool (Pan)" >
                     <Hand className="w-5 h-5" />
                 </button>  
+            </div>
         </div>
 
         <div className="flex items-center space-x-4 min-w-max px-4">
@@ -871,7 +890,10 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
                  <button
                     onClick={() => addElementCentered('signature')}
                     className={`p-2 rounded-lg ${activeTool === 'signature' ? 'bg-blue-100 text-blue-600' : 'text-slate-500 hover:bg-slate-100'}`}
-                    title="Sign"                >
+                    title="Sign"
+                >
+                    <FileSignature className="w-5 h-5" />
+                </button>
 
                 <button 
                     onClick={() => setActiveTool(activeTool === 'highlight' ? 'none' : 'highlight')}
@@ -1094,8 +1116,8 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
                                     className="absolute -top-4 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity cursor-move bg-slate-800 text-white rounded px-1 text-[10px]"
                                     onMouseDown={(e) => handleElementMouseDown(e, el.id)}
                                 >
-                                    <X className="w-3 h-3" />
-                                </button>
+                                    <Move className="w-3 h-3" />
+                                </div>
                            </div>
                        )}
                    </div>
