@@ -19,6 +19,9 @@ export const compressPDF = async (
         const totalPages = pdf.numPages;
 
         let pdfDoc: jsPDF | null = null;
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        if (!context) throw new Error('Canvas context not available');
 
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d');
@@ -89,6 +92,9 @@ export const flattenPDF = async (
         const totalPages = pdf.numPages;
 
         let pdfDoc: jsPDF | null = null;
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        if (!context) throw new Error('Canvas context not available');
 
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d');
