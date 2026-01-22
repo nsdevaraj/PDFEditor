@@ -19,22 +19,24 @@ import {
   ChevronRight,
   Move,
   Trash2,
-  EyeOff,
-  MousePointer2,
-  Hand,
-  Image as ImageIcon,
-  Minus,
-  Circle,
   Square,
-  ArrowRight,
+  ImageIcon,
+  ChevronDown,
+  Check,
+  Hand,
+  MousePointer2,
+  Pen,
+  Underline,
+  Strikethrough,
+  Waves,
+  Circle,
+  X as XIcon,
+  Minus,
+  ArrowUpRight,
   Undo,
   Redo,
-  ChevronDown,
   AlignLeft,
-  PenSquare,
-  Check,
-  Slash,
-  Pencil
+  Palette
 } from 'lucide-react';
 import { chatWithDocument } from '../services/geminiService';
 import * as pdfjsLib from 'pdfjs-dist';
@@ -47,38 +49,22 @@ interface PDFEditorProps {
   onClose: () => void;
 }
 
-// Expanded Tool Types
-type ToolType =
-  | 'none'
-  | 'select'
-  | 'hand'
-  | 'text'
-  | 'signature'
-  | 'draw'
-  | 'highlight'
-  | 'eraser'
-  | 'shape'
-  | 'image'
-  | 'redact'
-  | 'edit-text';
-
-type ShapeType = 'rect' | 'circle' | 'line' | 'arrow' | 'check' | 'cross';
+type InteractionMode = 'hand' | 'select' | 'draw' | 'eraser';
 
 interface EditorElement {
   id: string;
-  type: 'text' | 'signature' | 'highlight' | 'redact' | 'image' | 'path' | 'rect' | 'circle' | 'line' | 'arrow' | 'check' | 'cross';
+  type: 'text' | 'signature' | 'image' | 'rectangle' | 'circle' | 'line' | 'arrow' | 'check' | 'cross' | 'draw' | 'highlight' | 'underline' | 'strike' | 'squiggle';
   x: number;
   y: number;
-  content?: string; // Text content or Image DataURL
+  content?: string;
   width?: number;
   height?: number;
   page: number;
+  dataUrl?: string; // For images
+  pathData?: { x: number; y: number }[]; // For drawings
   strokeColor?: string;
   strokeWidth?: number;
-  fillColor?: string;
-  points?: {x: number, y: number}[]; // For freehand drawing
-  endX?: number; // For lines/arrows
-  endY?: number;
+  opacity?: number;
 }
 
 export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
@@ -89,33 +75,38 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
   const [isChatOpen, setIsChatOpen] = useState(true);
   
   // Editor State
-  const [activeTool, setActiveTool] = useState<ToolType>('select');
-  const [subTool, setSubTool] = useState<string>('pencil'); // For draw/shape sub-types
-  const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
-
+  const [interactionMode, setInteractionMode] = useState<InteractionMode>('select');
   const [elements, setElements] = useState<EditorElement[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  
+  // Dragging & Resizing State
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [resizeState, setResizeState] = useState<{
+      active: boolean;
+      handle: string; // 'nw', 'ne', 'sw', 'se'
+      startX: number;
+      startY: number;
+      initialX: number;
+      initialY: number;
+      initialWidth: number;
+      initialHeight: number;
+  } | null>(null);
+  
+  // Drawing State
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [currentPath, setCurrentPath] = useState<{ x: number; y: number }[]>([]);
+  const [drawColor, setDrawColor] = useState('#000000');
+  const [drawWidth, setDrawWidth] = useState(2);
+  const [drawOpacity, setDrawOpacity] = useState(1);
+
+  // History State
   const [history, setHistory] = useState<EditorElement[][]>([[]]);
   const [historyIndex, setHistoryIndex] = useState(0);
 
-  const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-  const [lastCreatedElementId, setLastCreatedElementId] = useState<string | null>(null);
-
-  // Panning State
-  const [isPanning, setIsPanning] = useState(false);
-  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
-  const [scrollStart, setScrollStart] = useState({ x: 0, y: 0 });
-
-  // Drawing/Creating State
-  const [isDrawing, setIsDrawing] = useState(false);
-  const [currentPath, setCurrentPath] = useState<{x: number, y: number}[]>([]);
-  const [creationElement, setCreationElement] = useState<EditorElement | null>(null);
-  const [startPoint, setStartPoint] = useState<{x: number, y: number} | null>(null);
-
-  // Tool Settings
-  const [strokeColor, setStrokeColor] = useState('#000000');
-  const [strokeWidth, setStrokeWidth] = useState(2);
-  const [fillColor, setFillColor] = useState('transparent');
+  // UI State
+  const [activeMenu, setActiveMenu] = useState<string | null>(null);
+  const [showExportMenu, setShowExportMenu] = useState(false);
 
   const [pdfDoc, setPdfDoc] = useState<any>(null);
   const [isRendering, setIsRendering] = useState(false);
@@ -123,8 +114,7 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const renderTaskRef = useRef<any>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const editorContainerRef = useRef<HTMLDivElement>(null); // Scrollable container
+  const imageInputRef = useRef<HTMLInputElement>(null);
   
   // Chat State
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -212,203 +202,217 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
     renderPage();
   }, [pdfDoc, currentPage, scale, rotation]);
 
-  // --- Tool Logic ---
-
-  const addToHistory = (newElements: EditorElement[]) => {
-      const newHistory = history.slice(0, historyIndex + 1);
-      newHistory.push(newElements);
-      setHistory(newHistory);
-      setHistoryIndex(newHistory.length - 1);
+  // --- History Management ---
+  const saveToHistory = (newElements: EditorElement[]) => {
+    const newHistory = history.slice(0, historyIndex + 1);
+    newHistory.push(newElements);
+    setHistory(newHistory);
+    setHistoryIndex(newHistory.length - 1);
+    setElements(newElements);
   };
 
   const handleUndo = () => {
-      if (historyIndex > 0) {
-          setHistoryIndex(historyIndex - 1);
-          setElements(history[historyIndex - 1]);
-      }
+    if (historyIndex > 0) {
+      setHistoryIndex(historyIndex - 1);
+      setElements(history[historyIndex - 1]);
+    }
   };
 
   const handleRedo = () => {
-      if (historyIndex < history.length - 1) {
-          setHistoryIndex(historyIndex + 1);
-          setElements(history[historyIndex + 1]);
+    if (historyIndex < history.length - 1) {
+      setHistoryIndex(historyIndex + 1);
+      setElements(history[historyIndex + 1]);
+    }
+  };
+
+  // --- Tool & Drag Logic ---
+
+  const addElementCentered = (type: EditorElement['type'], extraData?: any) => {
+      if (!canvasRef.current) return;
+      
+      const viewportWidth = canvasRef.current.width / scale;
+      const viewportHeight = canvasRef.current.height / scale;
+      
+      const defaultColor = type === 'highlight' ? '#fde047' : drawColor;
+      const defaultOpacity = type === 'highlight' ? 0.4 : 1;
+
+      const newElement: EditorElement = {
+          id: Date.now().toString(),
+          type,
+          x: (viewportWidth / 2) - 50,
+          y: (viewportHeight / 2) - 20,
+          page: currentPage,
+          content: type === 'text' ? 'Type here...' : type === 'signature' ? 'Alex. L' : undefined,
+          width: type === 'highlight' ? 200 : type === 'rectangle' || type === 'circle' ? 100 : type === 'line' || type === 'arrow' || type === 'underline' || type === 'strike' || type === 'squiggle' ? 150 : undefined,
+          height: type === 'highlight' || type === 'underline' || type === 'strike' || type === 'squiggle' ? 20 : type === 'rectangle' || type === 'circle' ? 100 : type === 'line' || type === 'arrow' ? 2 : undefined,
+          strokeColor: defaultColor,
+          opacity: defaultOpacity,
+          ...extraData
+      };
+      
+      saveToHistory([...elements, newElement]);
+      setInteractionMode('select');
+      setSelectedId(newElement.id); // Select newly added element
+      setActiveMenu(null);
+  };
+
+  const startDrawingMode = (color: string, width: number, opacity: number) => {
+      setInteractionMode('draw');
+      setDrawColor(color);
+      setDrawWidth(width);
+      setDrawOpacity(opacity);
+      setActiveMenu(null);
+      setSelectedId(null);
+  };
+
+  const updateSelectedColor = (color: string) => {
+      setDrawColor(color);
+      if (selectedId) {
+          const newElements = elements.map(el => el.id === selectedId ? { ...el, strokeColor: color } : el);
+          saveToHistory(newElements);
       }
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file && canvasRef.current) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-            // Simplified image add for now - center on screen
-            const viewportWidth = canvasRef.current!.width / scale;
-            const viewportHeight = canvasRef.current!.height / scale;
-
-            const newElement: EditorElement = {
-                id: Date.now().toString(),
-                type: 'image',
-                x: (viewportWidth / 2) - 100,
-                y: (viewportHeight / 2) - 100,
-                content: event.target.result as string,
-                width: 200,
-                height: 200,
-                page: currentPage
-            };
-            const newElements = [...elements, newElement];
-            setElements(newElements);
-            addToHistory(newElements);
-            setActiveTool('select');
-        }
-      };
-      reader.readAsDataURL(file);
-    }
-    // Reset input
-    e.target.value = '';
-  };
-
-  const addElementCentered = (type: 'text' | 'signature') => {
-      if (!canvasRef.current) return;
-      const viewportWidth = canvasRef.current.width / scale;
-      const viewportHeight = canvasRef.current.height / scale;
-
-      const newElement: EditorElement = {
-          id: Date.now().toString(),
-          type,
-          x: (viewportWidth / 2) - (type === 'text' ? 50 : 60),
-          y: (viewportHeight / 2) - 20,
-          page: currentPage,
-          content: type === 'text' ? 'Type here...' : 'Alex. L',
-          width: undefined,
-          height: undefined,
-      };
-
-      const newElements = [...elements, newElement];
-      setElements(newElements);
-      setLastCreatedElementId(newElement.id);
-      addToHistory(newElements);
-      setActiveTool('select');
-  };
-
-  // Auto-focus new text elements
-  useEffect(() => {
-    if (lastCreatedElementId) {
-      const el = elements.find(e => e.id === lastCreatedElementId);
-      if (el && el.type === 'text') {
-        const domEl = document.getElementById(`text-input-${el.id}`);
-        if (domEl) {
-          domEl.focus();
-          // Place cursor at end
-          const range = document.createRange();
-          const sel = window.getSelection();
-          range.selectNodeContents(domEl);
-          range.collapse(false);
-          sel?.removeAllRanges();
-          sel?.addRange(range);
-        }
+      if (e.target.files && e.target.files[0]) {
+          const file = e.target.files[0];
+          const reader = new FileReader();
+          reader.onload = (event) => {
+              if (event.target?.result && canvasRef.current) {
+                  const viewportWidth = canvasRef.current.width / scale;
+                  const viewportHeight = canvasRef.current.height / scale;
+                  
+                  const newElement: EditorElement = {
+                      id: Date.now().toString(),
+                      type: 'image',
+                      x: (viewportWidth / 2) - 75,
+                      y: (viewportHeight / 2) - 75,
+                      page: currentPage,
+                      width: 150,
+                      height: 150,
+                      dataUrl: event.target.result as string
+                  };
+                  saveToHistory([...elements, newElement]);
+                  setSelectedId(newElement.id);
+              }
+          };
+          reader.readAsDataURL(file);
       }
-      setLastCreatedElementId(null);
-    }
-  }, [lastCreatedElementId, elements]);
-
-  const addElement = (type: 'text' | 'signature' | 'highlight' | 'redact', x: number, y: number) => {
-      const newElement: EditorElement = {
-          id: Date.now().toString(),
-          type,
-          x,
-          y,
-          page: currentPage,
-          content: type === 'text' ? 'Type here...' : 'Alex. L',
-          width: type === 'text' || type === 'signature' ? undefined : 100,
-          height: type === 'text' || type === 'signature' ? undefined : 50,
-      };
-      
-      const newElements = [...elements, newElement];
-
-      setElements(prev => [...prev, newElement]);
-      setLastCreatedElementId(newElement.id);
-      addToHistory(newElements);
-      setActiveTool('select');
+      e.target.value = ''; // Reset input
   };
 
-
-  // --- Event Handlers ---
+  // --- Mouse Handlers ---
 
   const handleMouseDown = (e: React.MouseEvent) => {
-      // 1. Hand Tool
-      if (activeTool === 'hand') {
-          setIsPanning(true);
-          setPanStart({ x: e.clientX, y: e.clientY });
-          if (editorContainerRef.current) {
-              setScrollStart({
-                  x: editorContainerRef.current.scrollLeft,
-                  y: editorContainerRef.current.scrollTop
-              });
-          }
-          return;
-      }
-
-      if (!containerRef.current) return;
-      const rect = containerRef.current.getBoundingClientRect();
-      const x = (e.clientX - rect.left) / scale;
-      const y = (e.clientY - rect.top) / scale;
-
-      // 2. Drawing Tool
-      if (activeTool === 'draw') {
-          setIsDrawing(true);
-          setCurrentPath([{x, y}]);
-          return;
-      }
-
-      // 3. Shape Tool
-      if (activeTool === 'shape') {
-          setStartPoint({x, y});
-          const type = subTool as any;
-          const newEl: EditorElement = {
-              id: 'temp',
-              type: type,
-              x, y,
-              width: 0, height: 0,
-              endX: x, endY: y,
-              strokeColor: '#000000',
-              strokeWidth: 2,
-              fillColor: 'transparent',
-              page: currentPage
-          };
-          setCreationElement(newEl);
-          return;
-      }
-
-      // 4. Select Tool - Deselect or start drag (handled by element mousedown)
-  };
-
-
-  const handleCanvasClick = (e: React.MouseEvent) => {
-      if (activeTool === 'none' || activeTool === 'eraser' || !containerRef.current) return;
-
-      const containerRect = containerRef.current.getBoundingClientRect();
-      const x = (e.clientX - containerRect.left) / scale;
-      const y = (e.clientY - containerRect.top) / scale;
-
-      addElement(activeTool, x, y); 
-  };
-  
-  const handleElementMouseDown = (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    
-    if (activeTool === 'eraser') {
-      const newElements = elements.filter(el => el.id !== id);
-      setElements(newElements);
-      addToHistory(newElements);
-      return;
+    // If clicking on empty space, deselect
+    if (e.target === containerRef.current || e.target === canvasRef.current) {
+         if (interactionMode !== 'draw' && interactionMode !== 'eraser') {
+            setSelectedId(null);
+         }
     }
 
-    if (activeTool !== 'select') return;
+    if (interactionMode === 'draw' && containerRef.current) {
+        setIsDrawing(true);
+        const containerRect = containerRef.current.getBoundingClientRect();
+        const startX = (e.clientX - containerRect.left) / scale;
+        const startY = (e.clientY - containerRect.top) / scale;
+        setCurrentPath([{ x: startX, y: startY }]);
+    }
+  };
 
-    const element = elements.find(el => el.id === id);
-    if (!element) return;
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!containerRef.current) return;
+    const containerRect = containerRef.current.getBoundingClientRect();
 
+    if (resizeState && resizeState.active) {
+        const currentX = (e.clientX - containerRect.left) / scale;
+        const currentY = (e.clientY - containerRect.top) / scale;
+        
+        const deltaX = currentX - (resizeState.startX - containerRect.left) / scale;
+        const deltaY = currentY - (resizeState.startY - containerRect.top) / scale;
+
+        let newX = resizeState.initialX;
+        let newY = resizeState.initialY;
+        let newWidth = resizeState.initialWidth;
+        let newHeight = resizeState.initialHeight;
+
+        if (resizeState.handle.includes('e')) newWidth = Math.max(10, resizeState.initialWidth + deltaX);
+        if (resizeState.handle.includes('w')) {
+             const w = Math.max(10, resizeState.initialWidth - deltaX);
+             newX += resizeState.initialWidth - w;
+             newWidth = w;
+        }
+        if (resizeState.handle.includes('s')) newHeight = Math.max(10, resizeState.initialHeight + deltaY);
+        if (resizeState.handle.includes('n')) {
+             const h = Math.max(10, resizeState.initialHeight - deltaY);
+             newY += resizeState.initialHeight - h;
+             newHeight = h;
+        }
+
+        setElements(prev => prev.map(el => 
+            el.id === selectedId ? { ...el, x: newX, y: newY, width: newWidth, height: newHeight } : el
+        ));
+        return;
+    }
+
+    if (isDrawing) {
+        const x = (e.clientX - containerRect.left) / scale;
+        const y = (e.clientY - containerRect.top) / scale;
+        setCurrentPath(prev => [...prev, { x, y }]);
+    } else if (draggingId) {
+        const newX = (e.clientX - containerRect.left - dragOffset.x) / scale;
+        const newY = (e.clientY - containerRect.top - dragOffset.y) / scale;
+        setElements(prev => prev.map(el => 
+          el.id === draggingId ? { ...el, x: newX, y: newY } : el
+        ));
+    }
+  };
+
+  const handleMouseUp = () => {
+    if (resizeState?.active) {
+        saveToHistory(elements);
+        setResizeState(null);
+        return;
+    }
+
+    if (isDrawing) {
+        setIsDrawing(false);
+        if (currentPath.length > 1) {
+            const newElement: EditorElement = {
+                id: Date.now().toString(),
+                type: 'draw',
+                x: 0,
+                y: 0,
+                page: currentPage,
+                pathData: currentPath,
+                strokeColor: drawColor,
+                strokeWidth: drawWidth,
+                opacity: drawOpacity
+            };
+            saveToHistory([...elements, newElement]);
+        }
+        setCurrentPath([]);
+    }
+    if (draggingId) {
+        saveToHistory(elements);
+        setDraggingId(null);
+    }
+  };
+
+  const handleElementMouseDown = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation(); 
+    
+    // Eraser Mode Click Handling
+    if (interactionMode === 'eraser') {
+        removeElement(id);
+        return;
+    }
+
+    if (interactionMode !== 'select') return;
+    
+    setSelectedId(id);
     setDraggingId(id);
+    
     const elRect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     setDragOffset({
       x: e.clientX - elRect.left,
@@ -416,117 +420,50 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
     });
   };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
-    // 1. Pan
-    if (isPanning && editorContainerRef.current) {
-        const dx = e.clientX - panStart.x;
-        const dy = e.clientY - panStart.y;
-        editorContainerRef.current.scrollLeft = scrollStart.x - dx;
-        editorContainerRef.current.scrollTop = scrollStart.y - dy;
-        return;
-    }
-
-    if (!containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / scale;
-    const y = (e.clientY - rect.top) / scale;
-
-    // 2. Draw
-    if (isDrawing) {
-        setCurrentPath(prev => [...prev, {x, y}]);
-        return;
-    }
-
-    // 3. Create Shape
-    if (creationElement && startPoint) {
-        setCreationElement(prev => {
-            if (!prev) return null;
-            return {
-                ...prev,
-                width: x - startPoint.x,
-                height: y - startPoint.y,
-                endX: x,
-                endY: y
-            };
-        });
-        return;
-    }
-
-    // 4. Drag Element
-    if (activeTool === 'select' && draggingId && containerRef.current) {
-        const containerRect = containerRef.current.getBoundingClientRect();
-        const newX = (e.clientX - containerRect.left - dragOffset.x) / scale;
-        const newY = (e.clientY - containerRect.top - dragOffset.y) / scale;
-
-        setElements(prev => prev.map(el => {
-            if (el.id !== draggingId) return el;
-
-            if (el.type === 'line' || el.type === 'arrow') {
-                const dx = newX - el.x;
-                const dy = newY - el.y;
-                return { ...el, x: newX, y: newY, endX: el.endX! + dx, endY: el.endY! + dy };
-            }
-
-            return { ...el, x: newX, y: newY };
-        }));
-    }
+  const handleElementMouseEnter = (e: React.MouseEvent, id: string) => {
+      // Eraser Mode Drag Handling
+      if (interactionMode === 'eraser' && e.buttons === 1) {
+          removeElement(id);
+      }
   };
 
-  const handleMouseUp = () => {
-    setIsPanning(false);
+  const handleResizeStart = (e: React.MouseEvent, handle: string) => {
+      e.stopPropagation();
+      const el = elements.find(e => e.id === selectedId);
+      if (!el) return;
 
-    if (isDrawing) {
-        setIsDrawing(false);
-        if (currentPath.length > 2) {
-             const newElement: EditorElement = {
-                id: Date.now().toString(),
-                type: 'path',
-                x: 0, y: 0, // Path points are absolute relative to canvas
-                points: currentPath,
-                strokeColor: subTool === 'highlighter' ? '#fde047' : strokeColor,
-                strokeWidth: subTool === 'highlighter' ? 15 : strokeWidth,
-                page: currentPage,
-                // Highlight is transparent
-                fillColor: subTool === 'highlighter' ? 'transparent' : undefined
-            };
-            const newElements = [...elements, newElement];
-            setElements(newElements);
-            addToHistory(newElements);
-        }
-        setCurrentPath([]);
-    }
+      setResizeState({
+          active: true,
+          handle,
+          startX: e.clientX,
+          startY: e.clientY,
+          initialX: el.x,
+          initialY: el.y,
+          initialWidth: el.width || 100,
+          initialHeight: el.height || 100
+      });
+  };
 
-    if (creationElement) {
-        const finalElement = { ...creationElement, id: Date.now().toString() };
-        // Normalize rect dimensions if negative
-        if (finalElement.type === 'rect' || finalElement.type === 'circle') {
-             if (finalElement.width! < 0) {
-                 finalElement.x += finalElement.width!;
-                 finalElement.width = Math.abs(finalElement.width!);
-             }
-             if (finalElement.height! < 0) {
-                 finalElement.y += finalElement.height!;
-                 finalElement.height = Math.abs(finalElement.height!);
-             }
-        }
-
-        const newElements = [...elements, finalElement];
-        setElements(newElements);
-        addToHistory(newElements);
-        setCreationElement(null);
-        setStartPoint(null);
-        // Reset to select tool after shape creation? Or keep shape tool active?
-        // Usually keeping tool active is better for multiple shapes.
-    }
-
-    if (draggingId) {
-        setDraggingId(null);
-        // Could save history here if we tracked start position
-    }
+  const removeElement = (id: string) => {
+      saveToHistory(elements.filter(el => el.id !== id));
+      if (selectedId === id) setSelectedId(null);
   };
 
   const updateElementContent = (id: string, newContent: string) => {
     setElements(prev => prev.map(el => el.id === id ? { ...el, content: newContent } : el));
+  };
+
+  const handleExport = (format: string) => {
+      setShowExportMenu(false);
+      const content = `Simulated ${format} export for ${file.name}`;
+      const blob = new Blob([content], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${file.name.replace('.pdf', '')}.${format}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
   };
 
   // Chat Logic
@@ -580,371 +517,259 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
     }
   };
 
-  // Helper for Toolbar Button
-  const ToolButton = ({
-    active,
-    onClick,
-    icon: Icon,
-    title,
-    hasDropdown,
-    onDropdownClick
-  }: {
-    active: boolean,
-    onClick: () => void,
-    icon: any,
-    title: string,
-    hasDropdown?: boolean,
-    onDropdownClick?: (e: React.MouseEvent) => void
-  }) => (
-    <div className="flex items-center space-x-0.5 bg-slate-100 rounded-lg p-0.5">
-        <button
-            onClick={onClick}
-            className={`p-1.5 rounded-md transition-colors ${active ? 'bg-white shadow text-blue-600' : 'text-slate-600 hover:bg-slate-200'}`}
-            title={title}
-        >
-            <Icon className="w-4 h-4" />
-        </button>
-        {hasDropdown && (
-            <button
-                onClick={onDropdownClick}
-                className={`p-0.5 rounded-md transition-colors ${activeDropdown === title ? 'bg-slate-300' : 'text-slate-500 hover:bg-slate-200'}`}
-            >
-                <ChevronDown className="w-3 h-3" />
-            </button>
-        )}
-    </div>
-  );
-
-  // Helper to render element
-  const renderElement = (el: EditorElement) => {
-      switch (el.type) {
-          case 'text':
-              return (
-                <div
-                    contentEditable={activeTool === 'select'}
-                    suppressContentEditableWarning
-                    onBlur={(e) => updateElementContent(el.id, e.currentTarget.innerText)}
-                    className="text-slate-900 text-base px-2 py-1 border border-transparent hover:border-blue-400 hover:bg-blue-50/30 rounded outline-none min-w-[50px] cursor-text whitespace-nowrap"
-                    onMouseDown={(e) => e.stopPropagation()}
-                >
-                    {el.content}
-                </div>
-              );
-          case 'signature':
-              return (
-                 <div className="font-serif italic text-4xl text-blue-900 px-4 py-2 select-none border-2 border-transparent group-hover:border-blue-300 rounded-lg transition-all whitespace-nowrap bg-transparent">
-                    {el.content}
-                 </div>
-              );
-          case 'image':
-              return (
-                   <div className="relative">
-                        <img
-                            src={el.content}
-                            alt="User Upload"
-                            style={{
-                                width: el.width,
-                                height: el.height,
-                                pointerEvents: 'none'
-                            }}
-                        />
-                        <div className="absolute inset-0 border-2 border-transparent group-hover:border-blue-400 transition-colors" />
-                   </div>
-              );
-          case 'rect':
-              return (
-                  <div
-                    style={{
-                        width: el.width,
-                        height: el.height,
-                        border: `${el.strokeWidth}px solid ${el.strokeColor}`,
-                        backgroundColor: el.fillColor || 'transparent'
-                    }}
-                  />
-              );
-          case 'circle':
-              return (
-                  <div
-                    style={{
-                        width: el.width,
-                        height: el.height,
-                        borderRadius: '50%',
-                        border: `${el.strokeWidth}px solid ${el.strokeColor}`,
-                        backgroundColor: el.fillColor || 'transparent'
-                    }}
-                  />
-              );
-           case 'highlight': // Legacy highlight
-              return (
-                   <div
-                        className="bg-yellow-300/40 border border-yellow-400/50 hover:bg-yellow-300/60 transition-colors"
-                        style={{ width: el.width, height: el.height }}
-                    />
-              );
-           case 'redact': // Legacy redact
-              return (
-                   <div className="bg-black" style={{ width: el.width, height: el.height }} />
-              );
-           // SVG types (path, line, arrow) are handled in a separate SVG layer or absolutely positioned SVG
-           default: return null;
-      }
-  };
-
   return (
     <div 
-      className="flex h-full w-full bg-slate-100 overflow-hidden relative"
-      onMouseUp={handleMouseUp} 
-      onMouseMove={handleMouseMove}
-      onClick={() => setActiveDropdown(null)}
+      className="flex h-screen w-full bg-slate-100 overflow-hidden relative" 
+      onClick={() => { setActiveMenu(null); setShowExportMenu(false); }}
     >
-      <input
-        type="file"
-        ref={fileInputRef}
-        onChange={handleImageUpload}
-        accept="image/*"
-        className="hidden"
-      />
-
-      {/* Define Markers for Arrows */}
-      <svg style={{ position: 'absolute', width: 0, height: 0, overflow: 'hidden' }}>
-        <defs>
-            <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-            <polygon points="0 0, 10 3.5, 0 7" fill="#000000" />
-            </marker>
-        </defs>
-      </svg>
-
       {/* Top Bar */}
-
-  <div className="absolute top-0 left-0 right-0 h-16 bg-white shadow-sm flex items-center justify-between px-4 z-10 border-b border-slate-200 overflow-x-auto overflow-y-hidden">
-        <div className="flex items-center space-x-3 min-w-max">
+      <div className="absolute top-0 left-0 right-0 h-16 bg-white shadow-sm flex items-center justify-between px-4 z-10 border-b border-slate-200">
+        <div className="flex items-center space-x-3">
             <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg text-slate-500">
-                <X className="w-5 h-5" />
+                <ChevronLeft className="w-5 h-5" />
             </button>
-
             <div className="flex items-center space-x-2">
-                <FileText className="w-5 h-5 text-blue-600" />
-                <span className="font-semibold text-slate-800 truncate max-w-[150px] md:max-w-[200px]">{file.name}</span>
-            </div>
-            <div className="h-6 w-px bg-slate-200" />
-
-            <div className="flex items-center space-x-2">
-                <button 
-                    onClick={() => setActiveTool('hand')}
-                    className={`p-2 rounded-lg ${activeTool === 'hand' ? 'bg-blue-100 text-blue-600' : 'text-slate-500 hover:bg-slate-100'}`}
-                    title="Hand Tool (Pan)" >
-                    <Hand className="w-5 h-5" />
-                </button>  
+                <span className="font-bold text-lg text-slate-800">Edit PDF</span>
             </div>
         </div>
 
-        <div className="flex items-center space-x-4 min-w-max px-4">
-             {/* Pagination */}
-             {numPages > 0 && (
-                 <div className="flex items-center space-x-2 bg-slate-100 rounded-lg p-1 mr-2">
-                     <button 
-                        onClick={() => changePage(-1)} 
-                        disabled={currentPage <= 1}
-                        className="p-1 hover:bg-white rounded disabled:opacity-30"
-                     >
-                         <ChevronLeft className="w-4 h-4" />
-                     </button>
-                     <span className="text-xs font-medium w-16 text-center text-slate-600">
-                        {currentPage} / {numPages}
-                     </span>
-                     <button 
-                        onClick={() => changePage(1)} 
-                        disabled={currentPage >= numPages}
-                        className="p-1 hover:bg-white rounded disabled:opacity-30"
-                     >
-                         <ChevronRight className="w-4 h-4" />
-                     </button>
-                 </div>
-             )}
-
-            <div className="flex items-center space-x-2 bg-slate-100 rounded-lg p-1">
-                <button onClick={() => setScale(Math.max(0.5, scale - 0.1))} className="p-2 hover:bg-white rounded shadow-sm text-slate-600"><ZoomOut className="w-4 h-4" /></button>
-                <span className="text-xs font-medium w-12 text-center text-slate-600">{Math.round(scale * 100)}%</span>
-                <button onClick={() => setScale(Math.min(2.5, scale + 0.1))} className="p-2 hover:bg-white rounded shadow-sm text-slate-600"><ZoomIn className="w-4 h-4" /></button>
-            </div>
-        </div>
-
-        <div className="flex items-center space-x-4 min-w-max px-4">
-             <div className="flex items-center space-x-1 border-r border-slate-200 pr-4">
+        {/* Center Toolbar */}
+        <div className="flex items-center space-x-1 bg-white p-1 rounded-lg border border-slate-200 shadow-sm" onClick={(e) => e.stopPropagation()}>
+            
+            <div className="flex bg-slate-100 rounded-lg p-0.5">
                 <button 
-                    onClick={() => setActiveTool(activeTool === 'signature' ? 'none' : 'signature')}
-                    className={`p-2 rounded-lg transition-colors ${activeTool === 'signature' ? 'bg-blue-100 text-blue-600' : 'text-slate-500 hover:bg-slate-100'}`}
-                    title="Sign Document" 
+                    onClick={() => setInteractionMode('hand')}
+                    className={`p-1.5 rounded-md transition-colors ${interactionMode === 'hand' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}
+                    title="Pan"
                 >
-                    <MousePointer2 className="w-5 h-5" />
+                    <Hand className="w-4 h-4" />
                 </button>
-              <button  onClick={() => setActiveTool('select')}
-                    className={`p-2 rounded-lg ${activeTool === 'select' ? 'bg-blue-100 text-blue-600' : 'text-slate-500 hover:bg-slate-100'}`}
-                    title="Select Tool"
+                <button 
+                    onClick={() => setInteractionMode('select')}
+                    className={`p-1.5 rounded-md transition-colors ${interactionMode === 'select' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}
+                    title="Select"
                 >
-                    <MousePointer2 className="w-5 h-5" />
+                    <MousePointer2 className="w-4 h-4" />
                 </button>
             </div>
 
-            <div className="h-6 w-px bg-slate-200" />
+            <div className="w-px h-5 bg-slate-200 mx-1"></div>
 
-            <button
-                className="flex items-center space-x-2 px-3 py-1.5 rounded-lg text-slate-600 hover:bg-slate-100 font-medium text-sm"
-                title="Edit existing text (Not fully implemented)"
-                onClick={() => setActiveTool('edit-text')}
-            >
-                <PenSquare className="w-4 h-4" />
+            <button className="flex items-center space-x-1 px-3 py-1.5 text-slate-700 hover:bg-slate-50 rounded-lg border border-slate-200 text-sm font-medium">
+                <Type className="w-4 h-4" />
                 <span>Edit Text</span>
             </button>
 
-            <div className="h-6 w-px bg-slate-200" />
+            <div className="w-px h-5 bg-slate-200 mx-1"></div>
 
-            <div className="flex items-center space-x-2 relative">
-                 <button
-                    onClick={() => addElementCentered('text')} 
-                    className={`p-2 rounded-lg transition-colors ${activeTool === 'text' ? 'bg-blue-100 text-blue-600' : 'text-slate-500 hover:bg-slate-100'}`}
-                    title="Add Text"
-                >
-                    <Type className="w-5 h-5" />
+             {/* Color Picker */}
+             <div className="relative group">
+                <button className="p-2 rounded-lg flex items-center space-x-1 text-slate-600 hover:bg-slate-50">
+                     <div className="w-4 h-4 rounded-full border border-slate-300" style={{ backgroundColor: drawColor }}></div>
+                     <ChevronDown className="w-3 h-3" />
                 </button>
-
-                <div className="relative">
-                     <ToolButton
-                        active={activeTool === 'draw'}
-                        onClick={() => { setActiveTool('draw'); setSubTool('pencil'); }}
-                        icon={subTool === 'highlighter' ? Highlighter : Pencil}
-                        title="Draw"
-                        hasDropdown
-                        onDropdownClick={(e) => { e.stopPropagation(); setActiveDropdown(activeDropdown === 'draw' ? null : 'draw'); }}
-                     />
-                     {activeDropdown === 'draw' && (
-                         <div className="absolute top-full left-0 mt-1 w-40 bg-white shadow-xl rounded-lg border border-slate-100 py-1 z-50">
-                             <button onClick={() => { setActiveTool('draw'); setSubTool('pencil'); }} className="flex items-center space-x-2 w-full px-4 py-2 hover:bg-slate-50 text-sm">
-                                 <Pencil className="w-4 h-4" /> <span>Pencil</span>
-                             </button>
-                             <button onClick={() => { setActiveTool('draw'); setSubTool('highlighter'); }} className="flex items-center space-x-2 w-full px-4 py-2 hover:bg-slate-50 text-sm">
-                                 <Highlighter className="w-4 h-4" /> <span>Highlighter</span>
-                             </button>
-                             <div className="border-t border-slate-100 my-1" />
-                             <button onClick={() => setActiveTool('eraser')} className="flex items-center space-x-2 w-full px-4 py-2 hover:bg-slate-50 text-sm text-red-600">
-                                 <Eraser className="w-4 h-4" /> <span>Eraser</span>
-                             </button>
-                         </div>
-                     )}
-                </div>
-
-                <div className="relative">
-                    <ToolButton
-                         active={activeTool === 'highlight'}
-                         onClick={() => setActiveTool('highlight')}
-                         icon={Highlighter}
-                         title="Text Markup"
-                         hasDropdown
-                         onDropdownClick={(e) => { e.stopPropagation(); setActiveDropdown(activeDropdown === 'markup' ? null : 'markup'); }}
-                    />
-                    {activeDropdown === 'markup' && (
-                        <div className="absolute top-full left-0 mt-1 w-48 bg-white shadow-xl rounded-lg border border-slate-100 py-1 z-50">
-                            <button onClick={() => setActiveTool('highlight')} className="flex items-center space-x-2 w-full px-4 py-2 hover:bg-slate-50 text-sm">
-                                <Highlighter className="w-4 h-4 text-yellow-500" /> <span>Highlight</span>
-                            </button>
-                            <button onClick={() => { setActiveTool('shape'); setSubTool('line'); }} className="flex items-center space-x-2 w-full px-4 py-2 hover:bg-slate-50 text-sm">
-                                <Minus className="w-4 h-4" /> <span>Underline</span>
-                            </button>
-                             <button onClick={() => { setActiveTool('shape'); setSubTool('line'); }} className="flex items-center space-x-2 w-full px-4 py-2 hover:bg-slate-50 text-sm line-through">
-                                <span className="w-4 text-center">T</span> <span>Strikethrough</span>
-                            </button>
-                            <button onClick={() => { setActiveTool('draw'); setSubTool('pencil'); }} className="flex items-center space-x-2 w-full px-4 py-2 hover:bg-slate-50 text-sm">
-                                <span className="w-4 text-center">~</span> <span>Squiggle (Draw)</span>
-                            </button>
-                        </div>
-                    )}
-                </div>
-
-                <div className="relative">
-                    <ToolButton
-                         active={activeTool === 'shape'}
-                         onClick={() => { setActiveTool('shape'); setSubTool('rect'); }}
-                         icon={Square}
-                         title="Shapes"
-                         hasDropdown
-                         onDropdownClick={(e) => { e.stopPropagation(); setActiveDropdown(activeDropdown === 'shapes' ? null : 'shapes'); }}
-                    />
-                    {activeDropdown === 'shapes' && (
-                        <div className="absolute top-full left-0 mt-1 w-40 bg-white shadow-xl rounded-lg border border-slate-100 py-1 z-50">
-                            <button onClick={() => { setActiveTool('shape'); setSubTool('rect'); }} className="flex items-center space-x-2 w-full px-4 py-2 hover:bg-slate-50 text-sm">
-                                <Square className="w-4 h-4" /> <span>Rectangle</span>
-                            </button>
-                            <button onClick={() => { setActiveTool('shape'); setSubTool('circle'); }} className="flex items-center space-x-2 w-full px-4 py-2 hover:bg-slate-50 text-sm">
-                                <Circle className="w-4 h-4" /> <span>Circle</span>
-                            </button>
-                             <button onClick={() => { setActiveTool('shape'); setSubTool('line'); }} className="flex items-center space-x-2 w-full px-4 py-2 hover:bg-slate-50 text-sm">
-                                <Minus className="w-4 h-4" /> <span>Line</span>
-                            </button>
-                             <button onClick={() => { setActiveTool('shape'); setSubTool('arrow'); }} className="flex items-center space-x-2 w-full px-4 py-2 hover:bg-slate-50 text-sm">
-                                <ArrowRight className="w-4 h-4" /> <span>Arrow</span>
-                            </button>
-                        </div>
-                    )}
-                </div>
-
-                 <button
-                    onClick={() => addElementCentered('signature')}
-                    className={`p-2 rounded-lg ${activeTool === 'signature' ? 'bg-blue-100 text-blue-600' : 'text-slate-500 hover:bg-slate-100'}`}
-                    title="Sign"
-                >
-                    <FileSignature className="w-5 h-5" />
-                </button>
-
-                <button 
-                    onClick={() => setActiveTool(activeTool === 'highlight' ? 'none' : 'highlight')}
-                    className={`p-2 rounded-lg transition-colors ${activeTool === 'highlight' ? 'bg-yellow-100 text-yellow-600' : 'text-slate-500 hover:bg-slate-100'}`}
-                    title="Highlight"
-                >
-                    <Highlighter className="w-5 h-5" />
-                </button>
-                <button
-                    onClick={() => setActiveTool(activeTool === 'redact' ? 'none' : 'redact')}
-                    className={`p-2 rounded-lg transition-colors ${activeTool === 'redact' ? 'bg-slate-200 text-slate-900' : 'text-slate-500 hover:bg-slate-100'}`}
-                    title="Redact (Permanently hide content)"
-
-                >
-                    <FileSignature className="w-5 h-5" />
-                </button>
+                <input 
+                    type="color" 
+                    value={drawColor}
+                    onChange={(e) => updateSelectedColor(e.target.value)}
+                    className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+                    title="Change Color"
+                />
             </div>
 
-            <div className="h-6 w-px bg-slate-200" />
-
-             <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className={`p-2 rounded-lg ${activeTool === 'image' ? 'bg-blue-100 text-blue-600' : 'text-slate-500 hover:bg-slate-100'}`}
-                    title="Add Image"
-                >
-                    <ImageIcon className="w-5 h-5" />
+            <button 
+                onClick={() => addElementCentered('text')}
+                className="p-2 text-slate-600 hover:text-blue-600 hover:bg-slate-50 rounded-lg transition-colors"
+                title="Add Text"
+            >
+                <Type className="w-5 h-5" />
             </button>
 
-            <div className="h-6 w-px bg-slate-200" />
-
-            <div className="flex items-center space-x-1">
-                 <button onClick={handleUndo} disabled={historyIndex <= 0} className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg disabled:opacity-30">
-                     <Undo className="w-5 h-5" />
-                 </button>
-                 <button onClick={handleRedo} disabled={historyIndex >= history.length - 1} className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg disabled:opacity-30">
-                     <Redo className="w-5 h-5" />
-                 </button>
+            {/* Pencil Dropdown */}
+            <div className="relative">
+                <button 
+                    onClick={() => setActiveMenu(activeMenu === 'pencil' ? null : 'pencil')}
+                    className={`p-2 rounded-lg flex items-center space-x-1 ${activeMenu === 'pencil' ? 'bg-blue-50 text-blue-600' : 'text-slate-600 hover:bg-slate-50'}`}
+                >
+                    <Pen className="w-4 h-4" />
+                    <ChevronDown className="w-3 h-3" />
+                </button>
+                {activeMenu === 'pencil' && (
+                    <div className="absolute top-full left-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-slate-100 py-1 z-50">
+                        <button onClick={() => startDrawingMode('#000000', 2, 1)} className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center space-x-2 text-sm text-slate-700">
+                            <Pen className="w-4 h-4" />
+                            <span>Pencil</span>
+                        </button>
+                        <button onClick={() => startDrawingMode('#fde047', 15, 0.4)} className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center space-x-2 text-sm text-slate-700">
+                            <Highlighter className="w-4 h-4" />
+                            <span>Highlight</span>
+                        </button>
+                        <button onClick={() => { setInteractionMode('eraser'); setActiveMenu(null); setSelectedId(null); }} className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center space-x-2 text-sm text-slate-700">
+                            <Eraser className="w-4 h-4" />
+                            <span>Eraser</span>
+                        </button>
+                    </div>
+                )}
             </div>
+
+            {/* Markup Dropdown */}
+            <div className="relative">
+                <button 
+                    onClick={() => setActiveMenu(activeMenu === 'markup' ? null : 'markup')}
+                    className={`p-2 rounded-lg flex items-center space-x-1 ${activeMenu === 'markup' ? 'bg-blue-50 text-blue-600' : 'text-slate-600 hover:bg-slate-50'}`}
+                >
+                    <div className="flex items-center bg-slate-100 px-1 rounded border border-slate-200">
+                        <span className="text-xs font-serif font-bold">A</span>
+                        <span className="text-xs font-serif border-l border-slate-300 pl-0.5 ml-0.5">b</span>
+                    </div>
+                    <ChevronDown className="w-3 h-3" />
+                </button>
+                {activeMenu === 'markup' && (
+                    <div className="absolute top-full left-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-slate-100 py-1 z-50">
+                        <button onClick={() => addElementCentered('highlight')} className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center space-x-2 text-sm text-slate-700">
+                            <div className="bg-yellow-300 px-1 rounded text-xs font-bold">Ab</div>
+                            <span>Highlight</span>
+                        </button>
+                        <button onClick={() => addElementCentered('underline')} className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center space-x-2 text-sm text-slate-700">
+                            <Underline className="w-4 h-4" />
+                            <span>Underline</span>
+                        </button>
+                        <button onClick={() => addElementCentered('strike')} className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center space-x-2 text-sm text-slate-700">
+                            <Strikethrough className="w-4 h-4" />
+                            <span>Strikethrough</span>
+                        </button>
+                        <button onClick={() => addElementCentered('squiggle')} className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center space-x-2 text-sm text-slate-700">
+                            <Waves className="w-4 h-4" />
+                            <span>Squiggle</span>
+                        </button>
+                    </div>
+                )}
+            </div>
+
+            {/* Shape Dropdown */}
+            <div className="relative">
+                <button 
+                    onClick={() => setActiveMenu(activeMenu === 'shape' ? null : 'shape')}
+                    className={`p-2 rounded-lg flex items-center space-x-1 ${activeMenu === 'shape' ? 'bg-blue-50 text-blue-600' : 'text-slate-600 hover:bg-slate-50'}`}
+                >
+                    <Square className="w-4 h-4" />
+                    <ChevronDown className="w-3 h-3" />
+                </button>
+                {activeMenu === 'shape' && (
+                    <div className="absolute top-full left-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-slate-100 py-1 z-50">
+                        <button onClick={() => addElementCentered('rectangle')} className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center space-x-2 text-sm text-slate-700">
+                            <Square className="w-4 h-4" />
+                            <span>Rectangle</span>
+                        </button>
+                        <button onClick={() => addElementCentered('circle')} className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center space-x-2 text-sm text-slate-700">
+                            <Circle className="w-4 h-4" />
+                            <span>Circle</span>
+                        </button>
+                        <button onClick={() => addElementCentered('check')} className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center space-x-2 text-sm text-slate-700">
+                            <Check className="w-4 h-4" />
+                            <span>Checkmark</span>
+                        </button>
+                        <button onClick={() => addElementCentered('cross')} className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center space-x-2 text-sm text-slate-700">
+                            <XIcon className="w-4 h-4" />
+                            <span>Cross</span>
+                        </button>
+                        <button onClick={() => addElementCentered('line')} className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center space-x-2 text-sm text-slate-700">
+                            <Minus className="w-4 h-4 -rotate-45" />
+                            <span>Line</span>
+                        </button>
+                        <button onClick={() => addElementCentered('arrow')} className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center space-x-2 text-sm text-slate-700">
+                            <ArrowUpRight className="w-4 h-4" />
+                            <span>Arrow</span>
+                        </button>
+                    </div>
+                )}
+            </div>
+
+            {/* Signature Dropdown */}
+            <div className="relative">
+                <button 
+                    onClick={() => setActiveMenu(activeMenu === 'sign' ? null : 'sign')}
+                    className={`p-2 rounded-lg flex items-center space-x-1 ${activeMenu === 'sign' ? 'bg-blue-50 text-blue-600' : 'text-slate-600 hover:bg-slate-50'}`}
+                >
+                    <FileSignature className="w-4 h-4" />
+                    <ChevronDown className="w-3 h-3" />
+                </button>
+                {activeMenu === 'sign' && (
+                    <div className="absolute top-full left-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-slate-100 py-1 z-50">
+                        <button onClick={() => addElementCentered('signature')} className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center space-x-2 text-sm text-slate-700">
+                            <FileSignature className="w-4 h-4" />
+                            <span>Add Signature</span>
+                        </button>
+                        <button onClick={() => addElementCentered('signature', { content: 'Initials' })} className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center space-x-2 text-sm text-slate-700">
+                            <Type className="w-4 h-4" />
+                            <span>Add Initials</span>
+                        </button>
+                    </div>
+                )}
+            </div>
+
+             <button 
+                onClick={() => addElementCentered('text', { content: 'Date: ' + new Date().toLocaleDateString() })}
+                className="p-2 text-slate-600 hover:text-blue-600 hover:bg-slate-50 rounded-lg transition-colors"
+                title="Insert Field"
+            >
+                <AlignLeft className="w-5 h-5" />
+            </button>
+
+            <button 
+                onClick={() => imageInputRef.current?.click()}
+                className="p-2 text-slate-600 hover:text-blue-600 hover:bg-slate-50 rounded-lg transition-colors"
+                title="Add Image"
+            >
+                <ImageIcon className="w-5 h-5" />
+                <input 
+                    type="file" 
+                    accept="image/*" 
+                    className="hidden" 
+                    ref={imageInputRef}
+                    onChange={handleImageUpload}
+                />
+            </button>
+
+            <div className="w-px h-5 bg-slate-200 mx-1"></div>
+
+             <button onClick={handleUndo} disabled={historyIndex <= 0} className="p-2 text-slate-600 hover:text-blue-600 hover:bg-slate-50 rounded-lg transition-colors disabled:opacity-30">
+                <Undo className="w-4 h-4" />
+            </button>
+            <button onClick={handleRedo} disabled={historyIndex >= history.length - 1} className="p-2 text-slate-600 hover:text-blue-600 hover:bg-slate-50 rounded-lg transition-colors disabled:opacity-30">
+                <Redo className="w-4 h-4" />
+            </button>
 
         </div>
 
         <div className="flex items-center space-x-4">
-             <div className="flex items-center space-x-2 bg-slate-100 rounded-lg p-1">
-                <button onClick={() => setScale(Math.max(0.5, scale - 0.1))} className="p-2 hover:bg-white rounded shadow-sm text-slate-600"><ZoomOut className="w-4 h-4" /></button>
-                <span className="text-xs font-medium w-12 text-center text-slate-600">{Math.round(scale * 100)}%</span>
-                <button onClick={() => setScale(Math.min(2.5, scale + 0.1))} className="p-2 hover:bg-white rounded shadow-sm text-slate-600"><ZoomIn className="w-4 h-4" /></button>
-            </div>
-             <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 font-medium text-sm transition-colors">
-                <Download className="w-4 h-4" />
-                <span>Export</span>
-             </button>
+             <div className="relative">
+                 <button 
+                    onClick={(e) => { e.stopPropagation(); setShowExportMenu(!showExportMenu); }}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 font-medium text-sm transition-colors"
+                 >
+                    <Download className="w-4 h-4" />
+                    <span>Export</span>
+                    <ChevronDown className="w-3 h-3 opacity-80" />
+                 </button>
+                 
+                 {showExportMenu && (
+                     <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-xl border border-slate-100 py-2 z-50 animate-in fade-in slide-in-from-top-2">
+                        <div className="px-4 py-2 border-b border-slate-50">
+                            <span className="text-xs font-semibold text-slate-400 uppercase">Export As</span>
+                        </div>
+                        <button onClick={() => handleExport('pdf')} className="w-full text-left px-4 py-2.5 hover:bg-slate-50 flex items-center space-x-2 text-sm text-slate-700">
+                            <FileText className="w-4 h-4 text-red-500" />
+                            <span>PDF Document (.pdf)</span>
+                        </button>
+                        <button onClick={() => handleExport('docx')} className="w-full text-left px-4 py-2.5 hover:bg-slate-50 flex items-center space-x-2 text-sm text-slate-700">
+                            <FileText className="w-4 h-4 text-blue-600" />
+                            <span>Microsoft Word (.docx)</span>
+                        </button>
+                     </div>
+                 )}
+             </div>
+
              <button onClick={() => setIsChatOpen(!isChatOpen)} className={`p-2 rounded-lg transition-colors ${isChatOpen ? 'bg-blue-100 text-blue-600' : 'hover:bg-slate-100 text-slate-600'}`}>
                 <Bot className="w-5 h-5" />
              </button>
@@ -952,23 +777,22 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex mt-16 h-[calc(100%-64px)] relative">
+      <div className="flex-1 flex mt-16 h-[calc(100vh-64px)]">
         {/* PDF Viewer Canvas */}
-        <div
-            ref={editorContainerRef}
-            className="flex-1 bg-slate-200 overflow-auto flex justify-center p-8 relative"
-            style={{ cursor: activeTool === 'hand' ? (isPanning ? 'grabbing' : 'grab') : 'default' }}
-            onMouseDown={handleMouseDown}
+        <div className="flex-1 bg-slate-200 overflow-auto flex justify-center p-8 relative"
+             onMouseDown={handleMouseDown}
+             onMouseMove={handleMouseMove}
+             onMouseUp={handleMouseUp}
+             onMouseLeave={handleMouseUp}
         >
             <div 
                 ref={containerRef}
-                onClick={handleCanvasClick}
                 className="bg-white shadow-2xl transition-transform duration-75 ease-out origin-top relative"
                 style={{ 
                     minHeight: '400px',
-                    minWidth: '300px', 
-                    cursor: activeTool === 'eraser' || activeTool === 'text' || activeTool === 'highlight' || activeTool === 'redact' || activeTool === 'signature' ? 'crosshair' : 'default'
-
+                    minWidth: '300px',
+                    cursor: interactionMode === 'hand' ? 'grab' : interactionMode === 'draw' ? 'crosshair' : interactionMode === 'eraser' ? 'not-allowed' : 'default',
+                    userSelect: 'none'
                 }}
             >
                 {isRendering && !pdfDoc && (
@@ -977,182 +801,189 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
                      </div>
                 )}
                 
-                <canvas ref={canvasRef} className="block relative z-0" />
+                <canvas ref={canvasRef} className="block relative z-0 pointer-events-none" />
                 
-                {/* SVG Layer for Paths and Lines/Arrows */}
-                <svg className="absolute inset-0 pointer-events-none z-10" style={{ width: '100%', height: '100%' }}>
-                     {/* Render Current Drawing Path */}
-                     {isDrawing && currentPath.length > 0 && (
-                         <path
-                            d={`M ${currentPath.map(p => `${p.x * scale},${p.y * scale}`).join(' L ')}`}
-                            stroke={subTool === 'highlighter' ? '#fde047' : strokeColor}
-                            strokeWidth={(subTool === 'highlighter' ? 15 : strokeWidth) * scale}
-                            fill="none"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeOpacity={subTool === 'highlighter' ? 0.5 : 1}
-                         />
-                     )}
-
-                     {/* Render Lines/Arrows being created */}
-                     {creationElement && (creationElement.type === 'line' || creationElement.type === 'arrow') && (
-                         <line
-                            x1={creationElement.x * scale}
-                            y1={creationElement.y * scale}
-                            x2={creationElement.endX! * scale}
-                            y2={creationElement.endY! * scale}
-                            stroke="black"
-                            strokeWidth={2 * scale}
-                            markerEnd={creationElement.type === 'arrow' ? "url(#arrowhead)" : undefined}
-                         />
-                     )}
-
-                     {/* Render Existing Paths/Lines/Arrows */}
-                     {elements.filter(el => el.page === currentPage).map(el => {
-                         if (el.type === 'path' && el.points) {
-                             return (
-                                 <path
-                                    key={el.id}
-                                    d={`M ${el.points.map(p => `${(p.x + el.x) * scale},${(p.y + el.y) * scale}`).join(' L ')}`}
-                                    stroke={el.strokeColor}
-                                    strokeWidth={(el.strokeWidth || 2) * scale}
-                                    fill="none"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeOpacity={el.type === 'highlight' || (el.strokeWidth && el.strokeWidth > 10) ? 0.5 : 1}
-                                    style={{ pointerEvents: 'visibleStroke', cursor: activeTool === 'eraser' ? 'crosshair' : 'move' }}
-                                    onMouseDown={(e) => handleElementMouseDown(e, el.id)}
-                                 />
-                             );
-                         }
-                         if (el.type === 'line' || el.type === 'arrow') {
-                             return (
-                                 <line
-                                    key={el.id}
-                                    x1={el.x * scale}
-                                    y1={el.y * scale}
-                                    x2={el.endX! * scale}
-                                    y2={el.endY! * scale}
-                                    stroke={el.strokeColor || "black"}
-                                    strokeWidth={(el.strokeWidth || 2) * scale}
-                                    markerEnd={el.type === 'arrow' ? "url(#arrowhead)" : undefined}
-                                    style={{ pointerEvents: 'visibleStroke', cursor: activeTool === 'eraser' ? 'crosshair' : 'move' }}
-                                    onMouseDown={(e) => handleElementMouseDown(e, el.id)}
-                                 />
-                             );
-                         }
-                         return null;
-                     })}
-                </svg>
-
-                {/* DOM Elements Layer (Text, Images, Rects, Circles) */}
+                {/* Annotations Layer */}
                 {elements.filter(el => el.page === currentPage).map((el) => {
-                   if (el.type === 'path' || el.type === 'line' || el.type === 'arrow') return null; // Handled by SVG layer
-
+                   const isSelected = selectedId === el.id;
+                   
                    return (
                    <div 
                         key={el.id}
-                        className={`absolute z-20 group ${activeTool === 'eraser' ? 'hover:opacity-50 cursor-pointer' : 'cursor-move'}`}
+                        className={`absolute z-20 group ${interactionMode === 'select' ? 'cursor-move' : ''} ${isSelected ? 'ring-1 ring-blue-500' : ''}`}
                         style={{
                             left: el.x * scale,
                             top: el.y * scale,
                             transform: `scale(${scale})`, 
-                            transformOrigin: 'top left'
+                            transformOrigin: 'top left',
+                            pointerEvents: interactionMode === 'draw' ? 'none' : 'auto'
                         }}
                         onMouseDown={(e) => handleElementMouseDown(e, el.id)}
+                        onMouseEnter={(e) => handleElementMouseEnter(e, el.id)}
                    >
-                       {renderElement(el)}
-
-                       {/* Delete Button for DOM elements */}
-                       {activeTool !== 'eraser' && (
-                           <div className="absolute -top-3 -right-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button
-                                    onClick={(e) => { e.stopPropagation(); setElements(elements.filter(e => e.id !== el.id)) }}
-                                    className="p-1 bg-red-500 text-white rounded-full shadow hover:bg-red-600 scale-75" >
-                                            <X className="w-3 h-3" />
-                                        </button>
-                           </div>
+                       {/* Resize Handles - Only for specific types when selected */}
+                       {isSelected && ['rectangle', 'circle', 'image', 'highlight'].includes(el.type) && (
+                           <>
+                               <div className="absolute -top-1 -left-1 w-2.5 h-2.5 bg-blue-600 rounded-full cursor-nw-resize z-50" onMouseDown={(e) => handleResizeStart(e, 'nw')} />
+                               <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-blue-600 rounded-full cursor-ne-resize z-50" onMouseDown={(e) => handleResizeStart(e, 'ne')} />
+                               <div className="absolute -bottom-1 -left-1 w-2.5 h-2.5 bg-blue-600 rounded-full cursor-sw-resize z-50" onMouseDown={(e) => handleResizeStart(e, 'sw')} />
+                               <div className="absolute -bottom-1 -right-1 w-2.5 h-2.5 bg-blue-600 rounded-full cursor-se-resize z-50" onMouseDown={(e) => handleResizeStart(e, 'se')} />
+                           </>
                        )}
-                       {el.type === 'redact' && (
-                           <div className="relative group">
-                                <div
-                                        className="bg-black"
-                                        style={{
-                                            width: el.width,
-                                            height: el.height
-                                        }}
-                                />
-                                {activeTool !== 'eraser' && (
-                                   <div className="absolute -top-2 -right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); setElements(elements.filter(e => e.id !== el.id)) }}
-                                            className="p-1 bg-slate-500 text-white rounded-full shadow hover:bg-slate-600"
-                                        >
-                                            <X className="w-3 h-3" />
-                                        </button>
-                                   </div>
-                               )}
+
+                       {/* Delete Button for Selected Item */}
+                       {isSelected && (
+                           <div className="absolute -top-8 right-0 transition-opacity z-50">
+                                <button 
+                                    onClick={(e) => { e.stopPropagation(); removeElement(el.id); }}
+                                    className="p-1 bg-white text-red-500 border border-slate-200 rounded shadow-sm hover:bg-red-50"
+                                    title="Delete"
+                                >
+                                    <Trash2 className="w-3 h-3" />
+                                </button>
                            </div>
                        )}
 
+                       {/* Render Based on Type */}
                        {el.type === 'text' && (
-                            <div className="group relative">
-                                <div 
-                                    id={`text-input-${el.id}`}
-                                    contentEditable={activeTool !== 'eraser'}
-                                    suppressContentEditableWarning
-                                    onBlur={(e) => updateElementContent(el.id, e.currentTarget.innerText)}
-                                    className="text-slate-900 text-base px-2 py-1 border border-transparent hover:border-blue-400 hover:bg-blue-50/30 rounded outline-none min-w-[50px] cursor-text"
-                                    onMouseDown={(e) => {
-                                        // If interacting with text input, stop drag unless clicking border? 
-                                        // For simplicity, we allow drag via container, text edit via click
-                                        e.stopPropagation(); 
-                                    }}
-                                    // Custom drag handler for the text container wrapper to allow moving
-                                >
-                                    {el.content}
-                                </div>
-                                <div 
-                                    className="absolute -top-4 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity cursor-move bg-slate-800 text-white rounded px-1 text-[10px]"
-                                    onMouseDown={(e) => handleElementMouseDown(e, el.id)}
-                                >
-                                    <Move className="w-3 h-3" />
-                                </div>
+                            <div 
+                                contentEditable={interactionMode === 'select'}
+                                suppressContentEditableWarning
+                                onBlur={(e) => updateElementContent(el.id, e.currentTarget.innerText)}
+                                className="text-base px-2 py-1 border border-transparent hover:border-blue-400/50 rounded outline-none min-w-[50px] cursor-text"
+                                style={{ color: el.strokeColor || '#0f172a' }}
+                            >
+                                {el.content}
+                            </div>
+                       )}
+
+                       {el.type === 'signature' && (
+                           <div 
+                                className="font-serif italic text-4xl px-2 py-1 select-none border border-transparent hover:border-blue-300 rounded whitespace-nowrap"
+                                style={{ color: el.strokeColor || '#1e3a8a' }}
+                           >
+                               {el.content}
                            </div>
+                       )}
+
+                       {el.type === 'image' && el.dataUrl && (
+                           <img 
+                               src={el.dataUrl} 
+                               alt="Added" 
+                               className="pointer-events-none select-none shadow-sm border border-transparent hover:border-blue-400"
+                               style={{ width: el.width, height: el.height, objectFit: 'contain' }}
+                           />
+                       )}
+
+                       {el.type === 'rectangle' && (
+                           <div 
+                                className="border-2 hover:bg-blue-50/5 transition-colors" 
+                                style={{ width: el.width, height: el.height, borderColor: el.strokeColor }} 
+                           />
+                       )}
+                       
+                       {el.type === 'circle' && (
+                           <div 
+                                className="border-2 rounded-full hover:bg-blue-50/5 transition-colors" 
+                                style={{ width: el.width, height: el.height, borderColor: el.strokeColor }} 
+                           />
+                       )}
+
+                       {el.type === 'check' && (
+                           <Check className="w-10 h-10" style={{ color: el.strokeColor }} />
+                       )}
+
+                       {el.type === 'cross' && (
+                           <XIcon className="w-10 h-10" style={{ color: el.strokeColor }} />
+                       )}
+
+                       {el.type === 'line' && (
+                           <div className="hover:opacity-80" style={{ width: el.width, height: 3, backgroundColor: el.strokeColor }} />
+                       )}
+
+                        {el.type === 'arrow' && (
+                           <div className="flex items-center">
+                               <div className="h-0.5" style={{ width: el.width, backgroundColor: el.strokeColor }} />
+                               <div 
+                                    className="w-0 h-0 border-t-4 border-t-transparent border-l-[8px] border-b-4 border-b-transparent" 
+                                    style={{ borderLeftColor: el.strokeColor }}
+                               />
+                           </div>
+                       )}
+
+                       {el.type === 'highlight' && (
+                            <div 
+                                className="border border-transparent hover:border-blue-300" 
+                                style={{ width: el.width, height: el.height, backgroundColor: el.strokeColor, opacity: el.opacity }} 
+                            />
+                       )}
+                       
+                       {el.type === 'underline' && (
+                            <div className="border-b-2 w-full" style={{ width: el.width, height: el.height, borderColor: el.strokeColor }}></div>
+                       )}
+
+                       {el.type === 'strike' && (
+                            <div className="flex items-center w-full" style={{ width: el.width, height: el.height }}>
+                                <div className="w-full h-0.5" style={{ backgroundColor: el.strokeColor }}></div>
+                            </div>
+                       )}
+                       
+                       {el.type === 'squiggle' && (
+                            <div className="w-full border-b-2 border-dotted" style={{ width: el.width, height: el.height, borderColor: el.strokeColor }}></div>
+                       )}
+
+                       {el.type === 'draw' && el.pathData && (
+                           <svg 
+                                className="overflow-visible pointer-events-none"
+                                style={{ width: 0, height: 0 }}
+                           >
+                               <path 
+                                   d={`M ${el.pathData.map(p => `${p.x} ${p.y}`).join(' L ')}`}
+                                   fill="none"
+                                   stroke={el.strokeColor}
+                                   strokeWidth={el.strokeWidth}
+                                   strokeOpacity={el.opacity}
+                                   strokeLinecap="round"
+                                   strokeLinejoin="round"
+                               />
+                           </svg>
                        )}
                    </div>
-                   );
-                })}
-
-                {/* Render Shape being created (Rect/Circle) */}
-                {creationElement && (creationElement.type === 'rect' || creationElement.type === 'circle') && (
-                     <div
-                        className="absolute border-2 border-blue-500 bg-blue-100/20"
-                        style={{
-                            left: Math.min(creationElement.x, creationElement.endX!) * scale,
-                            top: Math.min(creationElement.y, creationElement.endY!) * scale,
-                            width: Math.abs(creationElement.width!) * scale,
-                            height: Math.abs(creationElement.height!) * scale,
-                            borderRadius: creationElement.type === 'circle' ? '50%' : '0'
-                        }}
-                     />
+                )})}
+                
+                {/* Active Drawing Path */}
+                {isDrawing && (
+                    <div className="absolute top-0 left-0 pointer-events-none z-30">
+                        <svg className="overflow-visible" style={{ width: 0, height: 0 }}>
+                            <path 
+                                d={`M ${currentPath.map(p => `${p.x * scale} ${p.y * scale}`).join(' L ')}`}
+                                fill="none"
+                                stroke={drawColor}
+                                strokeWidth={drawWidth * scale}
+                                strokeOpacity={drawOpacity}
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                            />
+                        </svg>
+                    </div>
                 )}
             </div>
         </div>
 
         {/* AI Assistant Sidebar */}
-        <div className={`${isChatOpen ? 'w-full md:w-96' : 'w-0'} absolute md:relative right-0 h-full bg-white border-l border-slate-200 transition-all duration-300 flex flex-col z-30`}>
+        <div className={`${isChatOpen ? 'w-96' : 'w-0'} bg-white border-l border-slate-200 transition-all duration-300 flex flex-col relative z-30`}>
             {/* ... Chat Interface ... */}
             <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0">
                 <div className="flex items-center space-x-2 text-blue-600">
                     <Wand2 className="w-5 h-5" />
                     <h3 className="font-bold">AI Assistant</h3>
                 </div>
-                 <div className="flex space-x-1">
+                <div className="flex space-x-1">
                      <span className="text-xs font-medium px-2 py-1 bg-blue-50 text-blue-600 rounded-full">Gemini 2.5</span>
                 </div>
             </div>
-             <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
                 {messages.map((msg) => (
                     <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                         <div className={`max-w-[85%] p-3 rounded-2xl text-sm leading-relaxed ${
@@ -1181,23 +1012,6 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
                 )}
                 <div ref={messagesEndRef} />
             </div>
-
-             {messages.length < 3 && !isAiProcessing && (
-                <div className="px-4 py-2 flex flex-wrap gap-2 bg-slate-50">
-                    <button 
-                        onClick={() => { setInput("Summarize this document"); handleSendMessage(); }}
-                        className="text-xs bg-white border border-blue-200 text-blue-700 px-3 py-1.5 rounded-full hover:bg-blue-50 transition-colors"
-                    >
-                        Summarize
-                    </button>
-                    <button 
-                         onClick={() => { setInput("What are the key dates?"); handleSendMessage(); }}
-                        className="text-xs bg-white border border-blue-200 text-blue-700 px-3 py-1.5 rounded-full hover:bg-blue-50 transition-colors"
-                    >
-                        Extract Key Data
-                    </button>
-                </div>
-            )}
 
             <div className="p-4 bg-white border-t border-slate-200">
                 <div className="relative">
