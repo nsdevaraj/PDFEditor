@@ -13,7 +13,7 @@ import {
 
 export const SettingsPage: React.FC = () => {
   return (
-    <div className="flex-1 bg-slate-50 p-8 h-screen overflow-y-auto">
+    <div className="flex-1 bg-slate-50 p-8 h-full overflow-y-auto">
       <div className="max-w-4xl mx-auto">
         <header className="mb-8">
             <h2 className="text-2xl font-bold text-slate-900">Settings</h2>

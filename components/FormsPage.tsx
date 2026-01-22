@@ -79,7 +79,7 @@ export const FormsPage: React.FC<FormsPageProps> = ({ onUpload, onChangeView }) 
   };
 
   return (
-    <div className="flex-1 bg-slate-50 p-8 h-screen overflow-y-auto">
+    <div className="flex-1 bg-slate-50 p-8 h-full overflow-y-auto">
       <div className="flex justify-between items-center mb-8">
         <div>
           <h2 className="text-2xl font-bold text-slate-900">Forms</h2>
@@ -142,45 +142,47 @@ export const FormsPage: React.FC<FormsPageProps> = ({ onUpload, onChangeView }) 
             </div>
         </div>
 
-        <table className="w-full text-left border-collapse">
-            <thead className="bg-slate-50 text-xs uppercase text-slate-500 font-semibold tracking-wider">
-                <tr>
-                    <th className="p-4 border-b border-slate-200">Name</th>
-                    <th className="p-4 border-b border-slate-200">Status</th>
-                    <th className="p-4 border-b border-slate-200">Last Modified</th>
-                    <th className="p-4 border-b border-slate-200 text-right">Actions</th>
-                </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-                {recentForms.map((form) => (
-                    <tr key={form.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="p-4">
-                            <div className="flex items-center space-x-3">
-                                <div className="p-2 bg-blue-50 rounded-lg">
-                                    <FileCheck className="w-5 h-5 text-blue-600" />
-                                </div>
-                                <span className="font-medium text-slate-900">{form.name}</span>
-                            </div>
-                        </td>
-                        <td className="p-4">
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                form.status === 'Completed' ? 'bg-emerald-100 text-emerald-700' :
-                                form.status === 'Draft' ? 'bg-slate-100 text-slate-600' :
-                                'bg-purple-100 text-purple-700'
-                            }`}>
-                                {form.status}
-                            </span>
-                        </td>
-                        <td className="p-4 text-sm text-slate-500">{form.modified}</td>
-                        <td className="p-4 text-right">
-                            <button className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg">
-                                <MoreHorizontal className="w-5 h-5" />
-                            </button>
-                        </td>
+        <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse min-w-[600px]">
+                <thead className="bg-slate-50 text-xs uppercase text-slate-500 font-semibold tracking-wider">
+                    <tr>
+                        <th className="p-4 border-b border-slate-200">Name</th>
+                        <th className="p-4 border-b border-slate-200">Status</th>
+                        <th className="p-4 border-b border-slate-200">Last Modified</th>
+                        <th className="p-4 border-b border-slate-200 text-right">Actions</th>
                     </tr>
-                ))}
-            </tbody>
-        </table>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                    {recentForms.map((form) => (
+                        <tr key={form.id} className="hover:bg-slate-50 transition-colors">
+                            <td className="p-4">
+                                <div className="flex items-center space-x-3">
+                                    <div className="p-2 bg-blue-50 rounded-lg">
+                                        <FileCheck className="w-5 h-5 text-blue-600" />
+                                    </div>
+                                    <span className="font-medium text-slate-900">{form.name}</span>
+                                </div>
+                            </td>
+                            <td className="p-4">
+                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                    form.status === 'Completed' ? 'bg-emerald-100 text-emerald-700' :
+                                    form.status === 'Draft' ? 'bg-slate-100 text-slate-600' :
+                                    'bg-purple-100 text-purple-700'
+                                }`}>
+                                    {form.status}
+                                </span>
+                            </td>
+                            <td className="p-4 text-sm text-slate-500">{form.modified}</td>
+                            <td className="p-4 text-right">
+                                <button className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg">
+                                    <MoreHorizontal className="w-5 h-5" />
+                                </button>
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
       </div>
     </div>
   );

@@ -68,7 +68,7 @@ export const ESignDashboard: React.FC<ESignDashboardProps> = ({ onUpload }) => {
   };
 
   return (
-    <div className="flex-1 bg-slate-50 p-8 h-screen overflow-y-auto">
+    <div className="flex-1 bg-slate-50 p-8 h-full overflow-y-auto">
       <div className="flex justify-between items-center mb-8">
         <div>
           <h2 className="text-2xl font-bold text-slate-900">eSign & Track</h2>
@@ -128,44 +128,46 @@ export const ESignDashboard: React.FC<ESignDashboardProps> = ({ onUpload }) => {
 
       {/* Table */}
       <div className="bg-white border border-slate-200 rounded-b-2xl overflow-hidden shadow-sm">
-        <table className="w-full text-left border-collapse">
-            <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 text-xs uppercase text-slate-500 font-semibold tracking-wider">
-                    <th className="p-4">Document</th>
-                    <th className="p-4">Recipient</th>
-                    <th className="p-4">Status</th>
-                    <th className="p-4">Date</th>
-                    <th className="p-4 text-right">Actions</th>
-                </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-                {requests.map(req => (
-                    <tr key={req.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="p-4">
-                            <div className="flex items-center space-x-3">
-                                <div className="p-2 bg-red-50 rounded-lg">
-                                    <FileSignature className="w-5 h-5 text-red-500" />
-                                </div>
-                                <span className="font-medium text-slate-900">{req.documentName}</span>
-                            </div>
-                        </td>
-                        <td className="p-4 text-slate-600">{req.recipient}</td>
-                        <td className="p-4">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${getStatusColor(req.status)}`}>
-                                {getStatusIcon(req.status)}
-                                {req.status}
-                            </span>
-                        </td>
-                        <td className="p-4 text-slate-500 text-sm">{req.date}</td>
-                        <td className="p-4 text-right">
-                            <button className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
-                                <MoreHorizontal className="w-5 h-5" />
-                            </button>
-                        </td>
+        <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse min-w-[800px]">
+                <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-xs uppercase text-slate-500 font-semibold tracking-wider">
+                        <th className="p-4">Document</th>
+                        <th className="p-4">Recipient</th>
+                        <th className="p-4">Status</th>
+                        <th className="p-4">Date</th>
+                        <th className="p-4 text-right">Actions</th>
                     </tr>
-                ))}
-            </tbody>
-        </table>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                    {requests.map(req => (
+                        <tr key={req.id} className="hover:bg-slate-50 transition-colors">
+                            <td className="p-4">
+                                <div className="flex items-center space-x-3">
+                                    <div className="p-2 bg-red-50 rounded-lg">
+                                        <FileSignature className="w-5 h-5 text-red-500" />
+                                    </div>
+                                    <span className="font-medium text-slate-900">{req.documentName}</span>
+                                </div>
+                            </td>
+                            <td className="p-4 text-slate-600">{req.recipient}</td>
+                            <td className="p-4">
+                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${getStatusColor(req.status)}`}>
+                                    {getStatusIcon(req.status)}
+                                    {req.status}
+                                </span>
+                            </td>
+                            <td className="p-4 text-slate-500 text-sm">{req.date}</td>
+                            <td className="p-4 text-right">
+                                <button className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
+                                    <MoreHorizontal className="w-5 h-5" />
+                                </button>
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
         <div className="p-4 border-t border-slate-200 bg-slate-50 text-center">
             <button className="text-sm text-blue-600 font-medium hover:text-blue-700">View All Activity</button>
         </div>

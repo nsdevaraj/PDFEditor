@@ -65,7 +65,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onUpload, onChangeView }) 
   };
 
   return (
-    <div className="flex-1 bg-slate-50 p-8 overflow-y-auto h-screen">
+    <div className="flex-1 bg-slate-50 p-8 overflow-y-auto h-full">
       <header className="mb-8">
         <h2 className="text-3xl font-bold text-slate-900">Welcome back, Alex</h2>
         <p className="text-slate-500 mt-1">Here is what's happening with your documents today.</p>

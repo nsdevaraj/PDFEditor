@@ -540,7 +540,7 @@ export const ToolsGrid: React.FC = () => {
   }
 
   return (
-    <div className="flex-1 bg-slate-50 p-8 h-screen overflow-y-auto relative">
+    <div className="flex-1 bg-slate-50 p-8 h-full overflow-y-auto relative">
       <div className="mb-8">
         <h2 className="text-2xl font-bold text-slate-900">All PDF Tools</h2>
         <p className="text-slate-500">Select a tool to get started</p>
