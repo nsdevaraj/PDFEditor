@@ -934,7 +934,7 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
 
                        {el.type === 'draw' && el.pathData && (
                            <svg 
-                                className="overflow-visible pointer-events-none"
+                                className="overflow-visible"
                                 style={{ width: 0, height: 0 }}
                            >
                                <path 
