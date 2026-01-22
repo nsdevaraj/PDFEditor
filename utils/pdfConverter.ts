@@ -23,17 +23,23 @@ export const convertPdfToImages = async (
 
   const extension = format === 'jpg' ? 'jpg' : format === 'tiff' ? 'tiff' : 'png';
 
+  // Create canvas once to reuse
+  const canvas = document.createElement('canvas');
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('Could not create canvas context');
+
   for (let i = 1; i <= numPages; i++) {
     const page = await pdf.getPage(i);
     const viewport = page.getViewport({ scale: 2.0 }); // High quality
 
-    // Create canvas
-    const canvas = document.createElement('canvas');
-    const context = canvas.getContext('2d');
-    canvas.height = viewport.height;
-    canvas.width = viewport.width;
-
-    if (!context) throw new Error('Could not create canvas context');
+    // Update dimensions (setting width/height automatically clears the canvas)
+    if (canvas.width !== viewport.width || canvas.height !== viewport.height) {
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+    } else {
+      // Clear canvas if dimensions match
+      context.clearRect(0, 0, canvas.width, canvas.height);
+    }
 
     // Render page
     const renderContext = {
