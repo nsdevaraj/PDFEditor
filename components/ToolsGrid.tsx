@@ -21,7 +21,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { compressPDF } from '../services/pdfService';
-import { convertPDFToExcel, convertPDFToPPT } from '../services/conversionService';
+import { convertPDFToExcel, convertPDFToPPT, convertPDFToWord } from '../services/conversionService';
 import { UploadedFile } from '../types';
 import { SplitPDF } from './SplitPDF';
 import { convertPdfToImages } from '../utils/pdfConverter';
@@ -165,6 +165,13 @@ export const ToolsGrid: React.FC = () => {
            setProgress(100);
         } else if (activeTool.title === "PDF to PPT") {
            const blob = await convertPDFToPPT(file);
+           setResultBlob(blob);
+           const url = URL.createObjectURL(blob);
+           setDownloadUrl(url);
+           setStatus('success');
+           setProgress(100);
+        } else if (activeTool.title === "PDF to Word") {
+           const blob = await convertPDFToWord(file);
            setResultBlob(blob);
            const url = URL.createObjectURL(blob);
            setDownloadUrl(url);

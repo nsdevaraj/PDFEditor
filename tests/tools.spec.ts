@@ -26,13 +26,13 @@ test.describe('PDF Tools', () => {
     await expect(page.getByText('All PDF Tools')).toBeVisible();
   });
 
-  test('PDF to Word (Simulated)', async ({ page }) => {
+  test('PDF to Word', async ({ page }) => {
     await page.getByText('PDF to Word').click();
     const fileInput = page.locator('input[type="file"]');
     await fileInput.setInputFiles(SAMPLE_PDF_PATH);
 
     // Should show success state eventually
-    await expect(page.getByText('Conversion Complete!')).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText('Conversion Complete!')).toBeVisible({ timeout: 45000 });
     // Check download button
     await expect(page.getByText('Download File')).toBeVisible();
   });

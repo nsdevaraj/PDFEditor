@@ -1,9 +1,10 @@
 import * as pdfjsLib from 'pdfjs-dist';
 import * as XLSX from 'xlsx';
 import PptxGenJS from 'pptxgenjs';
+import { Document, Packer, Paragraph, TextRun } from 'docx';
 
 // Configure PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://esm.sh/pdfjs-dist@4.0.379/build/pdf.worker.min.mjs`;
+pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
 interface TextItem {
   str: string;
@@ -19,12 +20,7 @@ const getPDFDocument = async (file: File) => {
   return await loadingTask.promise;
 };
 
-export const convertPDFToExcel = async (file: File): Promise<Blob> => {
-  const pdf = await getPDFDocument(file);
-  const wb = XLSX.utils.book_new();
-
-  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-    const page = await pdf.getPage(pageNum);
+const extractRowsFromPage = async (page: any): Promise<TextItem[][]> => {
     const viewport = page.getViewport({ scale: 1.0 });
     const textContent = await page.getTextContent();
 
@@ -68,6 +64,17 @@ export const convertPDFToExcel = async (file: File): Promise<Blob> => {
       currentRow.sort((a, b) => a.x - b.x);
       rows.push(currentRow);
     }
+
+    return rows;
+};
+
+export const convertPDFToExcel = async (file: File): Promise<Blob> => {
+  const pdf = await getPDFDocument(file);
+  const wb = XLSX.utils.book_new();
+
+  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+    const page = await pdf.getPage(pageNum);
+    const rows = await extractRowsFromPage(page);
 
     // Convert to array of arrays for XLSX
     const sheetData: string[][] = rows.map(row => row.map(item => item.str));
@@ -120,5 +127,46 @@ export const convertPDFToPPT = async (file: File): Promise<Blob> => {
   }
 
   const blob = await pptx.write({ outputType: 'blob' }) as Blob;
+  return blob;
+};
+
+export const convertPDFToWord = async (file: File): Promise<Blob> => {
+  const pdf = await getPDFDocument(file);
+  const allChildren: Paragraph[] = [];
+
+  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+    const page = await pdf.getPage(pageNum);
+    const rows = await extractRowsFromPage(page);
+
+    // If there are rows, add them as paragraphs
+    rows.forEach(row => {
+        const text = row.map(item => item.str).join(' ');
+        if (text.trim()) {
+            allChildren.push(new Paragraph({
+                children: [new TextRun(text)],
+                spacing: { after: 200 }
+            }));
+        }
+    });
+
+    // Add a page break between pages (except the last one)
+    if (pageNum < pdf.numPages) {
+       // docx automatically handles pagination, but we can force a break if we want strict page mapping.
+       // For flowable documents (Word), letting it flow is usually better, but let's add a visual separator or empty line if needed.
+       // Actually, maybe we can add a page break run?
+       // new Paragraph({ children: [new TextRun({ break: 1 })] }) is a line break.
+       // Page break: new Paragraph({ children: [new PageBreak()] }) - wait, check docx API.
+       // It seems simpler to just let it flow for now.
+    }
+  }
+
+  const doc = new Document({
+    sections: [{
+      properties: {},
+      children: allChildren,
+    }],
+  });
+
+  const blob = await Packer.toBlob(doc);
   return blob;
 };
