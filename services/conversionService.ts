@@ -86,7 +86,7 @@ const extractRowsFromPage = async (page: any): Promise<TextItem[][]> => {
 
     for (const item of items) {
       if (currentY === -1 || Math.abs(item.y - currentY) <= TOLERANCE) {
-        if (currentRow.length > 0 && item.x < currentRow[currentRow.length - 1].x) {
+        if (isRowSorted && currentRow.length > 0 && item.x < currentRow[currentRow.length - 1].x) {
           isRowSorted = false;
         }
         currentRow.push(item);
@@ -309,8 +309,6 @@ export const convertExcelToPDF = async (file: File): Promise<Blob> => {
     document.body.removeChild(element);
   }
 };
-
-const slideNameRegex = /slide(\d+)\.xml/;
 
 export const convertPPTToPDF = async (file: File): Promise<Blob> => {
   const arrayBuffer = await file.arrayBuffer();
