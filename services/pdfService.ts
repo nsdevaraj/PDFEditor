@@ -71,7 +71,7 @@ export const compressPDF = async (
                      imgData = new Uint8Array(buffer);
                  } else {
                      // Compress to JPEG with 0.5 quality
-                     // Use toBlob to avoid blocking the main thread
+                     // Optimization: Use toBlob to yield the event loop and avoid blocking the main thread
                      const blob = await new Promise<Blob | null>(resolve => (canvas as HTMLCanvasElement).toBlob(resolve, 'image/jpeg', 0.5));
                      if (!blob) throw new Error('Blob creation failed');
 
