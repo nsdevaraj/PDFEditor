@@ -343,7 +343,7 @@ export const convertPPTToPDF = async (file: File): Promise<Blob> => {
     if (match) {
       slideFilesData.push({
         name,
-        num: parseInt(match[1])
+        num: Number(match[1])
       });
     }
   }

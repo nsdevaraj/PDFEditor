@@ -63,7 +63,7 @@ function proposedImplementation(files) {
         if (match) {
             slideFilesData.push({
                 name,
-                num: parseInt(match[1])
+                num: Number(match[1])
             });
         }
     }
@@ -90,8 +90,8 @@ console.log('--- Benchmarking ---');
 
 try {
     const res1 = benchmark('Bad (Regex in Sort)', badImplementation);
-    const res2 = benchmark('Current (2 Regexes)', currentImplementation);
-    const res3 = benchmark('Proposed (1 Regex)', proposedImplementation);
+    const res2 = benchmark('Old (2 Regexes)', currentImplementation);
+    const res3 = benchmark('Current (1 Regex + Number)', proposedImplementation);
 
     // Verify
     console.log('--- Verification ---');
@@ -104,8 +104,8 @@ try {
     } else {
         console.error('❌ Mismatch in results!');
         console.log('Bad length:', res1.length);
-        console.log('Current length:', res2.length);
-        console.log('Proposed length:', res3.length);
+        console.log('Old length:', res2.length);
+        console.log('Current length:', res3.length);
     }
 
 } catch (e) {

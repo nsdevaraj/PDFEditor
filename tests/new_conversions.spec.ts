@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import path from 'path';
 
 test.describe('New PDF Conversion Tools', () => {
 
@@ -33,6 +34,17 @@ test.describe('New PDF Conversion Tools', () => {
 
     // Expect success
     await expect(page.getByText('Conversion Complete!')).toBeVisible({ timeout: 30000 });
+    await expect(page.getByText('Download File')).toBeVisible();
+  });
+
+  test('PPT to PDF', async ({ page }) => {
+    await page.getByText('PPT to PDF').click();
+    const fileInput = page.locator('input[type="file"]');
+    const pptxPath = path.join(process.cwd(), 'sample.pptx');
+    await fileInput.setInputFiles(pptxPath);
+
+    // Expect success
+    await expect(page.getByText('Conversion Complete!')).toBeVisible({ timeout: 60000 });
     await expect(page.getByText('Download File')).toBeVisible();
   });
 
