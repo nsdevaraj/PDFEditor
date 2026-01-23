@@ -351,7 +351,7 @@ export const convertPPTToPDF = async (file: File): Promise<Blob> => {
   zip.forEach((relativePath, zipEntry) => {
     const name = zipEntry.name;
     if (name.startsWith(prefix) && name.endsWith(suffix)) {
-      const numStr = name.substring(prefixLen, name.length - suffixLen);
+      const numStr = name.slice(prefixLen, -suffixLen);
       if (numStr.length > 0) {
         const num = Number(numStr);
         if (!isNaN(num)) {
