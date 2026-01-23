@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import path from 'path';
 import fs from 'fs';
 
-const SAMPLE_PDF_PATH = path.join(process.cwd(), 'sample.pdf');
+const SAMPLE_PDF_PATH = path.join(process.cwd(), 'large_sample.pdf');
 
 test.describe('Performance Benchmark: Compress PDF', () => {
   test.beforeAll(() => {

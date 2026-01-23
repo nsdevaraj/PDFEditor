@@ -39,6 +39,7 @@ export const compressPDF = async (
              let context: any;
              const useOffscreen = typeof OffscreenCanvas !== 'undefined';
 
+             // Reuse canvas to reduce DOM allocation overhead
              if (useOffscreen) {
                  canvas = new OffscreenCanvas(1, 1);
                  context = canvas.getContext('2d');
@@ -149,6 +150,7 @@ export const flattenPDF = async (
              let context: any;
              const useOffscreen = typeof OffscreenCanvas !== 'undefined';
 
+             // Reuse canvas to reduce DOM allocation overhead
              if (useOffscreen) {
                  canvas = new OffscreenCanvas(1, 1);
                  context = canvas.getContext('2d');
