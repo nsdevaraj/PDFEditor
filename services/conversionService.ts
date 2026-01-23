@@ -68,18 +68,22 @@ const extractRowsFromPage = async (page: any): Promise<TextItem[][]> => {
     const textContent = await page.getTextContent();
 
     // Extract text items with coordinates
-    const items: TextItem[] = textContent.items.map((item: any) => {
-      // transform matrix: [scaleX, skewY, skewX, scaleY, translateX, translateY]
-      // PDF coordinates start from bottom-left
-      const tx = item.transform;
-      return {
-        str: item.str,
-        x: tx[4],
-        y: viewport.height - tx[5], // Convert to top-down
-        width: item.width,
-        height: item.height || 10 // approximate height if missing
-      };
-    });
+    const len = textContent.items.length;
+    const items: TextItem[] = new Array(len);
+
+    for (let i = 0; i < len; i++) {
+        const item = textContent.items[i] as any;
+        const tx = item.transform;
+        // transform matrix: [scaleX, skewY, skewX, scaleY, translateX, translateY]
+        // PDF coordinates start from bottom-left
+        items[i] = {
+            str: item.str,
+            x: tx[4],
+            y: viewport.height - tx[5], // Convert to top-down
+            width: item.width,
+            height: item.height || 10 // approximate height if missing
+        };
+    }
 
     // Group by rows (Y coordinate) with tolerance
     const TOLERANCE = 5;
@@ -92,29 +96,31 @@ const extractRowsFromPage = async (page: any): Promise<TextItem[][]> => {
     let currentY = -1;
     let isRowSorted = true;
 
-    for (const item of items) {
-      if (currentY === -1 || Math.abs(item.y - currentY) <= TOLERANCE) {
-        if (isRowSorted && currentRow.length > 0 && item.x < currentRow[currentRow.length - 1].x) {
-          isRowSorted = false;
+    if (len > 0) {
+        currentRow.push(items[0]);
+        currentY = items[0].y;
+
+        for (let i = 1; i < len; i++) {
+            const item = items[i];
+            if (Math.abs(item.y - currentY) <= TOLERANCE) {
+                 if (isRowSorted && item.x < currentRow[currentRow.length - 1].x) {
+                    isRowSorted = false;
+                 }
+                 currentRow.push(item);
+            } else {
+                 if (!isRowSorted) {
+                    currentRow.sort(compareX);
+                 }
+                 rows.push(currentRow);
+                 currentRow = [item];
+                 currentY = item.y;
+                 isRowSorted = true;
+            }
         }
-        currentRow.push(item);
-        if (currentY === -1) currentY = item.y;
-      } else {
-        // Sort current row by X if needed
         if (!isRowSorted) {
-          currentRow.sort(compareX);
+            currentRow.sort(compareX);
         }
         rows.push(currentRow);
-        currentRow = [item];
-        currentY = item.y;
-        isRowSorted = true;
-      }
-    }
-    if (currentRow.length > 0) {
-      if (!isRowSorted) {
-        currentRow.sort(compareX);
-      }
-      rows.push(currentRow);
     }
 
     return rows;
