@@ -4,6 +4,14 @@ import * as pdfjsLib from 'pdfjs-dist';
 // Configure PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://esm.sh/pdfjs-dist@4.0.379/build/pdf.worker.min.mjs`;
 
+const getConcurrencyLimit = () => {
+  if (typeof navigator !== 'undefined' && navigator.hardwareConcurrency) {
+    // 2x hardware threads to account for IO wait times, max 16 to avoid flooding
+    return Math.min(navigator.hardwareConcurrency * 2, 16);
+  }
+  return 4; // Conservative default
+};
+
 export const compressPDF = async (
   file: File,
   onProgress: (progress: number) => void
@@ -21,7 +29,7 @@ export const compressPDF = async (
         let pdfDoc: jsPDF | null = null;
 
         // Parallel processing setup
-        const concurrency = 4;
+        const concurrency = getConcurrencyLimit();
         let currentIndex = 1;
         let completedCount = 0;
         const pagesData = new Array(totalPages);
@@ -131,7 +139,7 @@ export const flattenPDF = async (
         let pdfDoc: jsPDF | null = null;
 
         // Parallel processing setup
-        const concurrency = 4;
+        const concurrency = getConcurrencyLimit();
         let currentIndex = 1;
         let completedCount = 0;
         const pagesData = new Array(totalPages);
