@@ -106,10 +106,11 @@ const extractRowsFromPage = async (page: any): Promise<TextItem[][]> => {
                  if (isRowSorted) {
                      if (item.x < lastX) {
                         isRowSorted = false;
+                     } else {
+                        lastX = item.x;
                      }
                  }
                  currentRow.push(item);
-                 lastX = item.x;
             } else {
                  if (!isRowSorted) {
                     currentRow.sort(compareX);

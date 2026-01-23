@@ -9,82 +9,8 @@ interface TextItem {
 
 const compareX = (a: TextItem, b: TextItem) => a.x - b.x;
 
-// Variant 1: Naive (Always sort)
-const extractRowsNaive = (items: TextItem[]): TextItem[][] => {
-    const TOLERANCE = 5;
-    const rows: TextItem[][] = [];
-    const len = items.length;
-
-    // Sort by Y (top to bottom) - included in all variants as baseline
-    items.sort((a, b) => a.y - b.y);
-
-    let currentRow: TextItem[] = [];
-    let currentY = -1;
-
-    if (len > 0) {
-        currentRow.push(items[0]);
-        currentY = items[0].y;
-
-        for (let i = 1; i < len; i++) {
-            const item = items[i];
-            if (Math.abs(item.y - currentY) <= TOLERANCE) {
-                 currentRow.push(item);
-            } else {
-                 currentRow.sort(compareX); // Always sort
-                 rows.push(currentRow);
-                 currentRow = [item];
-                 currentY = item.y;
-            }
-        }
-        currentRow.sort(compareX); // Always sort
-        rows.push(currentRow);
-    }
-    return rows;
-};
-
-// Variant 2: Current (Optimistic sorting with array access)
+// Variant 2: Current (Optimistic sorting with lastX)
 const extractRowsCurrent = (items: TextItem[]): TextItem[][] => {
-    const TOLERANCE = 5;
-    const rows: TextItem[][] = [];
-    const len = items.length;
-
-    items.sort((a, b) => a.y - b.y);
-
-    let currentRow: TextItem[] = [];
-    let currentY = -1;
-    let isRowSorted = true;
-
-    if (len > 0) {
-        currentRow.push(items[0]);
-        currentY = items[0].y;
-
-        for (let i = 1; i < len; i++) {
-            const item = items[i];
-            if (Math.abs(item.y - currentY) <= TOLERANCE) {
-                 if (isRowSorted && item.x < currentRow[currentRow.length - 1].x) {
-                    isRowSorted = false;
-                 }
-                 currentRow.push(item);
-            } else {
-                 if (!isRowSorted) {
-                    currentRow.sort(compareX);
-                 }
-                 rows.push(currentRow);
-                 currentRow = [item];
-                 currentY = item.y;
-                 isRowSorted = true;
-            }
-        }
-        if (!isRowSorted) {
-            currentRow.sort(compareX);
-        }
-        rows.push(currentRow);
-    }
-    return rows;
-};
-
-// Variant 3: Optimized (Optimistic sorting with lastX variable)
-const extractRowsOptimized = (items: TextItem[]): TextItem[][] => {
     const TOLERANCE = 5;
     const rows: TextItem[][] = [];
     const len = items.length;
@@ -130,6 +56,103 @@ const extractRowsOptimized = (items: TextItem[]): TextItem[][] => {
     return rows;
 };
 
+// Variant 4: Skip LastX Update Only
+const extractRowsSkipLastX = (items: TextItem[]): TextItem[][] => {
+    const TOLERANCE = 5;
+    const rows: TextItem[][] = [];
+    const len = items.length;
+
+    items.sort((a, b) => a.y - b.y);
+
+    let currentRow: TextItem[] = [];
+    let currentY = -1;
+    let isRowSorted = true;
+    let lastX = -Infinity;
+
+    if (len > 0) {
+        currentRow.push(items[0]);
+        currentY = items[0].y;
+        lastX = items[0].x;
+
+        for (let i = 1; i < len; i++) {
+            const item = items[i];
+            if (Math.abs(item.y - currentY) <= TOLERANCE) {
+                 if (isRowSorted) {
+                     if (item.x < lastX) {
+                        isRowSorted = false;
+                     } else {
+                        lastX = item.x;
+                     }
+                 }
+                 currentRow.push(item);
+            } else {
+                 if (!isRowSorted) {
+                    currentRow.sort(compareX);
+                 }
+                 rows.push(currentRow);
+                 currentRow = [item];
+                 currentY = item.y;
+                 lastX = item.x;
+                 isRowSorted = true;
+            }
+        }
+        if (!isRowSorted) {
+            currentRow.sort(compareX);
+        }
+        rows.push(currentRow);
+    }
+    return rows;
+};
+
+// Variant 5: Skip LastX + NoAbs
+const extractRowsSkipLastXNoAbs = (items: TextItem[]): TextItem[][] => {
+    const TOLERANCE = 5;
+    const rows: TextItem[][] = [];
+    const len = items.length;
+
+    items.sort((a, b) => a.y - b.y);
+
+    let currentRow: TextItem[] = [];
+    let currentY = -1;
+    let isRowSorted = true;
+    let lastX = -Infinity;
+
+    if (len > 0) {
+        currentRow.push(items[0]);
+        currentY = items[0].y;
+        lastX = items[0].x;
+
+        for (let i = 1; i < len; i++) {
+            const item = items[i];
+            // Since items are sorted by Y, item.y >= currentY is always true.
+            if ((item.y - currentY) <= TOLERANCE) {
+                 if (isRowSorted) {
+                     if (item.x < lastX) {
+                        isRowSorted = false;
+                     } else {
+                        lastX = item.x;
+                     }
+                 }
+                 currentRow.push(item);
+            } else {
+                 if (!isRowSorted) {
+                    currentRow.sort(compareX);
+                 }
+                 rows.push(currentRow);
+                 currentRow = [item];
+                 currentY = item.y;
+                 lastX = item.x;
+                 isRowSorted = true;
+            }
+        }
+        if (!isRowSorted) {
+            currentRow.sort(compareX);
+        }
+        rows.push(currentRow);
+    }
+    return rows;
+};
+
 // Data Generation
 const generateData = (count: number): TextItem[] => {
     const items: TextItem[] = [];
@@ -156,7 +179,7 @@ const generateData = (count: number): TextItem[] => {
 };
 
 const runBenchmark = () => {
-    const COUNT = 200000;
+    const COUNT = 2000000;
     console.log(`Generating ${COUNT} items...`);
     const data = generateData(COUNT);
 
@@ -165,33 +188,31 @@ const runBenchmark = () => {
     const data2 = data.map(i => ({...i}));
     const data3 = data.map(i => ({...i}));
 
-    console.log("Running Naive...");
-    const start1 = performance.now();
-    extractRowsNaive(data1);
-    const end1 = performance.now();
-    console.log(`Naive: ${(end1 - start1).toFixed(2)}ms`);
-
     console.log("Running Current...");
-    const start2 = performance.now();
-    extractRowsCurrent(data2);
-    const end2 = performance.now();
-    console.log(`Current: ${(end2 - start2).toFixed(2)}ms`);
+    const start1 = performance.now();
+    extractRowsCurrent(data1);
+    const end1 = performance.now();
+    console.log(`Current: ${(end1 - start1).toFixed(2)}ms`);
 
-    console.log("Running Optimized...");
+    console.log("Running SkipLastX...");
+    const start2 = performance.now();
+    extractRowsSkipLastX(data2);
+    const end2 = performance.now();
+    console.log(`SkipLastX: ${(end2 - start2).toFixed(2)}ms`);
+
+    console.log("Running SkipLastXNoAbs...");
     const start3 = performance.now();
-    extractRowsOptimized(data3);
+    extractRowsSkipLastXNoAbs(data3);
     const end3 = performance.now();
-    console.log(`Optimized: ${(end3 - start3).toFixed(2)}ms`);
+    console.log(`SkipLastXNoAbs: ${(end3 - start3).toFixed(2)}ms`);
 
     // Calculate improvements
-    const impCurrent = ((end1 - start1) - (end2 - start2)) / (end1 - start1) * 100;
-    const impOptimized = ((end2 - start2) - (end3 - start3)) / (end2 - start2) * 100;
-    const totalImp = ((end1 - start1) - (end3 - start3)) / (end1 - start1) * 100;
+    const impSkip = ((end1 - start1) - (end2 - start2)) / (end1 - start1) * 100;
+    const impNoAbs = ((end1 - start1) - (end3 - start3)) / (end1 - start1) * 100;
 
     console.log(`--- Results ---`);
-    console.log(`Naive vs Current Improvement: ${impCurrent.toFixed(2)}%`);
-    console.log(`Current vs Optimized Improvement: ${impOptimized.toFixed(2)}%`);
-    console.log(`Total Improvement (Naive vs Optimized): ${totalImp.toFixed(2)}%`);
+    console.log(`Current vs SkipLastX Improvement: ${impSkip.toFixed(2)}%`);
+    console.log(`Current vs SkipLastXNoAbs Improvement: ${impNoAbs.toFixed(2)}%`);
 };
 
 if (import.meta.url === `file://${process.argv[1]}`) {
