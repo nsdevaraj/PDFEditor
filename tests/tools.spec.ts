@@ -125,7 +125,7 @@ test.describe('PDF Tools', () => {
   });
 
   test('OCR', async ({ page }) => {
-    test.skip(true, 'OCR is too slow in this environment (timeouts > 2m)');
+    // test.skip(true, 'OCR is too slow in this environment (timeouts > 2m)');
     test.setTimeout(180000);
     await page.getByText('OCR').click();
     const fileInput = page.locator('input[type="file"]');

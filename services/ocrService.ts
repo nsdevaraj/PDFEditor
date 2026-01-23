@@ -23,8 +23,9 @@ export const performOCR = async (
     const pdf = await loadingTask.promise;
     const totalPages = pdf.numPages;
 
-    // Use 2 workers to balance speed and resource usage
-    const CONCURRENCY = 2;
+    // Use navigator.hardwareConcurrency if available, default to 4
+    // We cap at hardwareConcurrency, but also consider memory usage of Tesseract workers.
+    const CONCURRENCY = Math.min(navigator.hardwareConcurrency || 4, 4);
     const workerCount = Math.min(totalPages, CONCURRENCY);
 
     // Initialize workers
@@ -67,17 +68,35 @@ export const performOCR = async (
                 viewport: viewport,
             }).promise;
 
-            const imageData = canvas.toDataURL('image/png');
+            // Convert canvas to blob asynchronously to avoid blocking main thread
+            const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
+            if (!blob) throw new Error('Canvas conversion failed');
 
-            // Perform OCR
-            const result = await worker.recognize(imageData);
+            // Start OCR and Base64 conversion in parallel
+            // Tesseract accepts Blob directly, so we don't need to wait for Base64
+            const ocrPromise = worker.recognize(blob);
+
+            // We still need Base64 for jsPDF later
+            const base64Promise = new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result as string);
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+            });
+
+            const [result, imageData] = await Promise.all([ocrPromise, base64Promise]);
+
+            // Extract lines from blocks if not directly available (Tesseract v5+ change)
+            const lines = result.data.lines || (result.data.blocks || []).flatMap((b: any) =>
+                (b.paragraphs || []).flatMap((p: any) => p.lines || [])
+            );
 
             // Store result
             results[pageIndex - 1] = {
                 imageData,
                 widthPt: viewport.width / scale,
                 heightPt: viewport.height / scale,
-                lines: result.data.lines,
+                lines: lines,
                 pageIndex
             };
 
