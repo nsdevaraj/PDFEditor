@@ -8,6 +8,13 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   import.meta.url
 ).toString();
 
+const getConcurrencyLimit = () => {
+  if (typeof navigator !== 'undefined' && navigator.hardwareConcurrency) {
+    return Math.max(1, navigator.hardwareConcurrency);
+  }
+  return 4;
+};
+
 export const convertPdfToImages = async (
   file: File,
   format: 'jpg' | 'png' | 'tiff',
@@ -25,12 +32,24 @@ export const convertPdfToImages = async (
   let processedCount = 0;
 
   // Parallel processing configuration
-  // Using a concurrency of 2 to balance speed and memory usage.
-  // Higher concurrency caused main thread contention in benchmarks.
-  const concurrency = 2;
+  // Using dynamic concurrency to maximize throughput while avoiding main thread blocking
+  const concurrency = getConcurrencyLimit();
+
+  // Use OffscreenCanvas if available to reduce main thread overhead
+  const useOffscreen = typeof OffscreenCanvas !== 'undefined';
+
   const canvasPool = Array.from({ length: concurrency }).map(() => {
-    const canvas = document.createElement('canvas');
-    const context = canvas.getContext('2d');
+    let canvas: HTMLCanvasElement | OffscreenCanvas;
+    let context: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
+
+    if (useOffscreen) {
+        canvas = new OffscreenCanvas(1, 1);
+        context = canvas.getContext('2d') as OffscreenCanvasRenderingContext2D | null;
+    } else {
+        canvas = document.createElement('canvas');
+        context = canvas.getContext('2d');
+    }
+
     if (!context) throw new Error('Could not create canvas context');
     return { canvas, context };
   });
@@ -38,7 +57,7 @@ export const convertPdfToImages = async (
   // Create a queue of page numbers
   const pagesQueue = Array.from({ length: numPages }, (_, i) => i + 1);
 
-  const processPages = async (poolItem: { canvas: HTMLCanvasElement, context: CanvasRenderingContext2D }) => {
+  const processPages = async (poolItem: { canvas: HTMLCanvasElement | OffscreenCanvas, context: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D }) => {
      const { canvas, context } = poolItem;
      while (pagesQueue.length > 0) {
          // Determine next page index synchronously
@@ -60,7 +79,7 @@ export const convertPdfToImages = async (
 
              // Render page
              const renderContext = {
-               canvasContext: context,
+               canvasContext: context as any,
                viewport: viewport,
              };
 
@@ -74,9 +93,14 @@ export const convertPdfToImages = async (
                  blob = new Blob([tiffData], { type: 'image/tiff' });
              } else {
                  const mimeType = format === 'jpg' ? 'image/jpeg' : 'image/png';
-                 blob = await new Promise<Blob | null>((resolve) => {
-                   canvas.toBlob((b) => resolve(b), mimeType, 0.9);
-                 });
+
+                 if (useOffscreen && canvas instanceof OffscreenCanvas) {
+                     blob = await canvas.convertToBlob({ type: mimeType, quality: 0.9 });
+                 } else {
+                     blob = await new Promise<Blob | null>((resolve) => {
+                       (canvas as HTMLCanvasElement).toBlob((b) => resolve(b), mimeType, 0.9);
+                     });
+                 }
              }
 
              if (blob) {
