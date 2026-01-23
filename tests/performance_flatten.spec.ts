@@ -11,7 +11,7 @@ test.describe('Performance Tests', () => {
         if (!fs.existsSync(SAMPLE_PDF_PATH)) {
             console.log('Generating large PDF for testing...');
             try {
-                execSync('node tests/setup_large_pdf.js');
+                execSync('node tests/setup_pdfs.js');
             } catch (e) {
                 console.error('Failed to generate PDF:', e);
                 throw e;
