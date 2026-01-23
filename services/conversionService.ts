@@ -10,8 +10,6 @@ import JSZip from 'jszip';
 // Configure PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
-const slideRegex = /^ppt\/slides\/slide(\d+)\.xml$/;
-
 interface TextItem {
   str: string;
   x: number;
@@ -339,18 +337,28 @@ export const convertPPTToPDF = async (file: File): Promise<Blob> => {
   const allFiles = Object.keys(zip.files);
   const slideFilesData: { name: string; num: number }[] = [];
 
-  // Optimized Loop-Sort-Map:
-  // 1. Iterate once to filter and extract slide numbers using a constant regex (slideRegex).
+  // Optimized Loop-Sort-Map with String Operations:
+  // 1. Iterate once to filter and extract slide numbers using fast string ops (startsWith/substring).
   // 2. Sort the lightweight object array by number.
   // 3. Map back to filenames.
-  // This avoids re-running regex and parseInt during the sort comparison (O(N) vs O(N log N)).
+  // This avoids regex overhead entirely and is faster than regex matching.
+  const prefix = 'ppt/slides/slide';
+  const suffix = '.xml';
+  const prefixLen = prefix.length;
+  const suffixLen = suffix.length;
+
   for (const name of allFiles) {
-    const match = name.match(slideRegex);
-    if (match) {
-      slideFilesData.push({
-        name,
-        num: Number(match[1])
-      });
+    if (name.startsWith(prefix) && name.endsWith(suffix)) {
+      const numStr = name.substring(prefixLen, name.length - suffixLen);
+      if (numStr.length > 0) {
+        const num = Number(numStr);
+        if (!isNaN(num)) {
+          slideFilesData.push({
+            name,
+            num
+          });
+        }
+      }
     }
   }
 
