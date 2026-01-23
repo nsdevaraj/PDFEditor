@@ -29,6 +29,14 @@ const getPDFDocument = async (file: File) => {
 
 const compareX = (a: TextItem, b: TextItem) => a.x - b.x;
 
+const getConcurrencyLimit = () => {
+  if (typeof navigator !== 'undefined' && navigator.hardwareConcurrency) {
+    // 2x hardware threads to account for IO wait times, max 16 to avoid flooding
+    return Math.min(navigator.hardwareConcurrency * 2, 16);
+  }
+  return 4; // Conservative default
+};
+
 const processPagesInBatches = async <T>(
   pdf: any,
   concurrency: number,
@@ -122,7 +130,7 @@ export const convertPDFToExcel = async (file: File): Promise<Blob> => {
     return await extractRowsFromPage(page);
   };
 
-  const allPageRows = await processPagesInBatches(pdf, 10, processPage);
+  const allPageRows = await processPagesInBatches(pdf, getConcurrencyLimit(), processPage);
 
   allPageRows.forEach((rows, index) => {
     const pageNum = index + 1;
@@ -149,7 +157,7 @@ export const convertPDFToPPT = async (file: File): Promise<Blob> => {
     return { viewport, textContent };
   };
 
-  const pagesData = await processPagesInBatches(pdf, 10, processPage);
+  const pagesData = await processPagesInBatches(pdf, getConcurrencyLimit(), processPage);
 
   pagesData.forEach(({ viewport, textContent }) => {
     const slide = pptx.addSlide();
@@ -193,7 +201,7 @@ export const convertPDFToWord = async (file: File): Promise<Blob> => {
     return await extractRowsFromPage(page);
   };
 
-  const allPageRows = await processPagesInBatches(pdf, 10, processPage);
+  const allPageRows = await processPagesInBatches(pdf, getConcurrencyLimit(), processPage);
 
   const allChildren: Paragraph[] = [];
 
