@@ -23,8 +23,9 @@ export const performOCR = async (
     const pdf = await loadingTask.promise;
     const totalPages = pdf.numPages;
 
-    // Use 2 workers to balance speed and resource usage
-    const CONCURRENCY = 2;
+    // Use navigator.hardwareConcurrency if available, default to 4
+    // We cap at hardwareConcurrency, but also consider memory usage of Tesseract workers.
+    const CONCURRENCY = Math.min(navigator.hardwareConcurrency || 4, 4);
     const workerCount = Math.min(totalPages, CONCURRENCY);
 
     // Initialize workers
