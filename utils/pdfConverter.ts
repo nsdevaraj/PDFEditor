@@ -22,53 +22,68 @@ export const convertPdfToImages = async (
   const numPages = pdf.numPages;
 
   const extension = format === 'jpg' ? 'jpg' : format === 'tiff' ? 'tiff' : 'png';
+  let processedCount = 0;
 
-  // Create canvas once to reuse
-  const canvas = document.createElement('canvas');
-  const context = canvas.getContext('2d');
-  if (!context) throw new Error('Could not create canvas context');
+  // Parallel processing configuration
+  const CONCURRENCY = 3;
+  const pageNumbers = Array.from({ length: numPages }, (_, i) => i + 1);
 
-  for (let i = 1; i <= numPages; i++) {
-    const page = await pdf.getPage(i);
-    const viewport = page.getViewport({ scale: 2.0 }); // High quality
+  const processPage = async (pageNum: number) => {
+    try {
+        const page = await pdf.getPage(pageNum);
+        const viewport = page.getViewport({ scale: 2.0 }); // High quality
 
-    // Update dimensions (setting width/height automatically clears the canvas)
-    if (canvas.width !== viewport.width || canvas.height !== viewport.height) {
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
-    } else {
-      // Clear canvas if dimensions match
-      context.clearRect(0, 0, canvas.width, canvas.height);
+        // Create a new canvas for each page to allow parallelism
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        if (!context) throw new Error('Could not create canvas context');
+
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+
+        // Render page
+        const renderContext = {
+          canvasContext: context,
+          viewport: viewport,
+        };
+
+        await page.render(renderContext).promise;
+
+        let blob: Blob | null = null;
+
+        if (format === 'tiff') {
+            const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+            const tiffData = UTIF.encodeImage(imageData.data, canvas.width, canvas.height);
+            blob = new Blob([tiffData], { type: 'image/tiff' });
+        } else {
+            const mimeType = format === 'jpg' ? 'image/jpeg' : 'image/png';
+            blob = await new Promise<Blob | null>((resolve) => {
+              canvas.toBlob((b) => resolve(b), mimeType, 0.9); // 0.9 quality for jpg
+            });
+        }
+
+        if (blob) {
+          zip.file(`page_${pageNum}.${extension}`, blob);
+        }
+
+        // Clean up canvas
+        canvas.width = 0;
+        canvas.height = 0;
+
+        processedCount++;
+        onProgress((processedCount / numPages) * 100);
+    } catch (error) {
+        console.error(`Error processing page ${pageNum}`, error);
+        // Continue processing other pages
+        processedCount++;
+        onProgress((processedCount / numPages) * 100);
     }
+  };
 
-    // Render page
-    const renderContext = {
-      canvasContext: context,
-      viewport: viewport,
-    };
-
-    await page.render(renderContext).promise;
-
-    let blob: Blob | null = null;
-
-    if (format === 'tiff') {
-        const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-        const tiffData = UTIF.encodeImage(imageData.data, canvas.width, canvas.height);
-        blob = new Blob([tiffData], { type: 'image/tiff' });
-    } else {
-        const mimeType = format === 'jpg' ? 'image/jpeg' : 'image/png';
-        blob = await new Promise<Blob | null>((resolve) => {
-          canvas.toBlob((b) => resolve(b), mimeType, 0.9); // 0.9 quality for jpg
-        });
-    }
-
-    if (blob) {
-      // Add to zip
-      zip.file(`page_${i}.${extension}`, blob);
-    }
-
-    // Update progress
-    onProgress((i / numPages) * 100);
+  // Process pages in batches
+  for (let i = 0; i < pageNumbers.length; i += CONCURRENCY) {
+    const batch = pageNumbers.slice(i, i + CONCURRENCY);
+    await Promise.all(batch.map(pageNum => processPage(pageNum)));
   }
 
   // Generate zip
