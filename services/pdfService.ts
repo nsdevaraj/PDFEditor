@@ -45,7 +45,16 @@ export const compressPDF = async (
                  await page.render({ canvasContext: context, viewport }).promise;
 
                  // Compress to JPEG with 0.5 quality
-                 const imgData = canvas.toDataURL('image/jpeg', 0.5);
+                 // Use toBlob to avoid blocking the main thread
+                 const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.5));
+                 if (!blob) throw new Error('Blob creation failed');
+
+                 const reader = new FileReader();
+                 const imgData = await new Promise<string>((resolve, reject) => {
+                     reader.onload = () => resolve(reader.result as string);
+                     reader.onerror = reject;
+                     reader.readAsDataURL(blob);
+                 });
 
                  // Calculate original page dimensions in points
                  const pdfPageWidth = viewport.width / renderScale;
