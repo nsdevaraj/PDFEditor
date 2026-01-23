@@ -67,17 +67,31 @@ export const performOCR = async (
                 viewport: viewport,
             }).promise;
 
-            const imageData = canvas.toDataURL('image/png');
+            // Use canvas.toBlob instead of toDataURL to avoid blocking the main thread
+            const blob = await new Promise<Blob>((resolve, reject) => {
+              canvas.toBlob((b) => {
+                if (b) resolve(b);
+                else reject(new Error('Canvas to Blob failed'));
+              }, 'image/png');
+            });
 
-            // Perform OCR
-            const result = await worker.recognize(imageData);
+            // Convert blob to base64 asynchronously for PDF generation later
+            const base64Data = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(reader.result as string);
+              reader.onerror = reject;
+              reader.readAsDataURL(blob);
+            });
+
+            // Perform OCR using the blob
+            const result = await worker.recognize(blob);
 
             // Store result
             results[pageIndex - 1] = {
-                imageData,
+                imageData: base64Data,
                 widthPt: viewport.width / scale,
                 heightPt: viewport.height / scale,
-                lines: result.data.lines,
+                lines: result.data?.lines || [],
                 pageIndex
             };
 
