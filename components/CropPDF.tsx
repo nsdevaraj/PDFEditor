@@ -32,6 +32,15 @@ export const CropPDF: React.FC<CropPDFProps> = ({ file, onClose }) => {
   const [marginLeft, setMarginLeft] = useState(0);
   const [marginRight, setMarginRight] = useState(0);
 
+  // Cleanup object URL
+  useEffect(() => {
+    return () => {
+      if (previewUrl && previewUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
+
   useEffect(() => {
     const loadPdf = async () => {
       try {
@@ -65,7 +74,12 @@ export const CropPDF: React.FC<CropPDFProps> = ({ file, onClose }) => {
             viewport: viewport
           }).promise;
 
-          setPreviewUrl(canvas.toDataURL());
+          // Optimize: Use toBlob instead of toDataURL to avoid blocking main thread
+          const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.8));
+          if (blob) {
+            const url = URL.createObjectURL(blob);
+            setPreviewUrl(url);
+          }
         }
         setIsLoading(false);
       } catch (error) {

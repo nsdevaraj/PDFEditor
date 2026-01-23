@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { UploadedFile } from '../types';
 import {
   X,
@@ -33,6 +33,15 @@ export const RotatePDF: React.FC<RotatePDFProps> = ({ file, onClose }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
 
+  const objectUrlsRef = useRef<string[]>([]);
+
+  // Cleanup object URLs on unmount
+  useEffect(() => {
+    return () => {
+      objectUrlsRef.current.forEach(url => URL.revokeObjectURL(url));
+    };
+  }, []);
+
   useEffect(() => {
     const loadPdf = async () => {
       try {
@@ -45,6 +54,10 @@ export const RotatePDF: React.FC<RotatePDFProps> = ({ file, onClose }) => {
 
         const loadingTask = pdfjsLib.getDocument({ data: uint8Array });
         const pdf = await loadingTask.promise;
+
+        // Cleanup previous URLs if file changed without unmounting
+        objectUrlsRef.current.forEach(url => URL.revokeObjectURL(url));
+        objectUrlsRef.current = [];
 
         const newThumbnails: PageThumbnail[] = [];
 
@@ -64,10 +77,18 @@ export const RotatePDF: React.FC<RotatePDFProps> = ({ file, onClose }) => {
               viewport: viewport
             }).promise;
 
+            // Optimize: Use toBlob instead of toDataURL to avoid blocking main thread
+            const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.7));
+            const url = blob ? URL.createObjectURL(blob) : '';
+
+            if (url) {
+              objectUrlsRef.current.push(url);
+            }
+
             newThumbnails.push({
               pageIndex: i - 1,
               pageNumber: i,
-              dataUrl: canvas.toDataURL(),
+              dataUrl: url,
               rotation: 0
             });
           }
