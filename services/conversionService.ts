@@ -334,7 +334,6 @@ export const convertPPTToPDF = async (file: File): Promise<Blob> => {
 
   // Try to find slides in ppt/slides/slideX.xml
   // And map relationships to find order, but simple approach: filter files
-  const allFiles = Object.keys(zip.files);
   const slideFilesData: { name: string; num: number }[] = [];
 
   // Optimized Loop-Sort-Map with String Operations:
@@ -342,12 +341,14 @@ export const convertPPTToPDF = async (file: File): Promise<Blob> => {
   // 2. Sort the lightweight object array by number.
   // 3. Map back to filenames.
   // This avoids regex overhead entirely and is faster than regex matching.
+  // Using zip.forEach avoids allocating an array of all keys.
   const prefix = 'ppt/slides/slide';
   const suffix = '.xml';
   const prefixLen = prefix.length;
   const suffixLen = suffix.length;
 
-  for (const name of allFiles) {
+  zip.forEach((relativePath, zipEntry) => {
+    const name = zipEntry.name;
     if (name.startsWith(prefix) && name.endsWith(suffix)) {
       const numStr = name.substring(prefixLen, name.length - suffixLen);
       if (numStr.length > 0) {
@@ -360,7 +361,7 @@ export const convertPPTToPDF = async (file: File): Promise<Blob> => {
         }
       }
     }
-  }
+  });
 
   // Optimization: removed .map() to avoid array allocation
   const slideFiles = slideFilesData
