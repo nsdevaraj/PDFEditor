@@ -1,11 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, Suspense } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Dashboard } from './components/Dashboard';
-import { PDFEditor } from './components/PDFEditor';
-import { ToolsGrid } from './components/ToolsGrid';
-import { ESignDashboard } from './components/ESignDashboard';
-import { FormsPage } from './components/FormsPage';
-import { SettingsPage } from './components/SettingsPage';
 import { AppView, UploadedFile } from './types';
 import {
   Menu,
@@ -17,8 +12,16 @@ import {
   Settings,
   LogOut,
   Zap,
-  X
+  X,
+  Loader2
 } from 'lucide-react';
+
+// Lazy load components for better performance (code splitting)
+const PDFEditor = React.lazy(() => import('./components/PDFEditor').then(module => ({ default: module.PDFEditor })));
+const ToolsGrid = React.lazy(() => import('./components/ToolsGrid').then(module => ({ default: module.ToolsGrid })));
+const ESignDashboard = React.lazy(() => import('./components/ESignDashboard').then(module => ({ default: module.ESignDashboard })));
+const FormsPage = React.lazy(() => import('./components/FormsPage').then(module => ({ default: module.FormsPage })));
+const SettingsPage = React.lazy(() => import('./components/SettingsPage').then(module => ({ default: module.SettingsPage })));
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<AppView>(AppView.DASHBOARD);
@@ -173,7 +176,13 @@ const App: React.FC = () => {
         )}
 
         {/* Dynamic Content */}
-        {renderContent()}
+        <Suspense fallback={
+          <div className="flex-1 flex items-center justify-center bg-slate-50">
+            <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+          </div>
+        }>
+          {renderContent()}
+        </Suspense>
 
       </main>
     </div>
