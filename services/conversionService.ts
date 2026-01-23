@@ -10,7 +10,7 @@ import JSZip from 'jszip';
 // Configure PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
-const slideRegex = /ppt\/slides\/slide(\d+)\.xml/;
+const slideRegex = /^ppt\/slides\/slide(\d+)\.xml$/;
 
 interface TextItem {
   str: string;

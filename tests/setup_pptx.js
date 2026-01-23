@@ -1,7 +1,8 @@
-import PptxGenJS from 'pptxgenjs';
+import pptxgen from 'pptxgenjs';
 import fs from 'fs';
 
 async function createSamplePptx() {
+  const PptxGenJS = pptxgen.default || pptxgen;
   const pptx = new PptxGenJS();
 
   // Add Slide 1
