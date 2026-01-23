@@ -183,21 +183,21 @@ export const flattenPDF = async (
                  await page.render({ canvasContext: context, viewport }).promise;
 
                  let imgData: Uint8Array;
+                 let blob: Blob | null;
 
                  if (useOffscreen && (canvas instanceof OffscreenCanvas)) {
-                     const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.95 });
-                     const buffer = await blob.arrayBuffer();
-                     imgData = new Uint8Array(buffer);
+                     blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.95 });
                  } else {
                      // Use PNG or high quality JPEG for flattening
-                     // Use toBlob to avoid blocking the main thread, then read as base64
-                     // Verified ~13% performance improvement over toDataURL
-                     const blob = await new Promise<Blob | null>(resolve => (canvas as HTMLCanvasElement).toBlob(resolve, 'image/jpeg', 0.95));
-                     if (!blob) throw new Error('Blob creation failed');
-
-                     const buffer = await blob.arrayBuffer();
-                     imgData = new Uint8Array(buffer);
+                     // Use toBlob to avoid blocking the main thread
+                     // Verified performance improvement over toDataURL (prevents main thread blocking)
+                     blob = await new Promise<Blob | null>(resolve => (canvas as HTMLCanvasElement).toBlob(resolve, 'image/jpeg', 0.95));
                  }
+
+                 if (!blob) throw new Error('Blob creation failed');
+
+                 const buffer = await blob.arrayBuffer();
+                 imgData = new Uint8Array(buffer);
 
                  // Calculate original page dimensions in points
                  const pdfPageWidth = viewport.width / renderScale;
