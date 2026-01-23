@@ -30,15 +30,10 @@ export const convertPdfToImages = async (
   const pageNumbers = Array.from({ length: numPages }, (_, i) => i + 1);
   let currentIndex = 0;
 
-  const processPage = async (pageNum: number) => {
+  const processPage = async (pageNum: number, canvas: HTMLCanvasElement, context: CanvasRenderingContext2D) => {
     try {
         const page = await pdf.getPage(pageNum);
         const viewport = page.getViewport({ scale: 2.0 }); // High quality
-
-        // Create a new canvas for each page to allow parallelism
-        const canvas = document.createElement('canvas');
-        const context = canvas.getContext('2d');
-        if (!context) throw new Error('Could not create canvas context');
 
         canvas.width = viewport.width;
         canvas.height = viewport.height;
@@ -68,10 +63,6 @@ export const convertPdfToImages = async (
           zip.file(`page_${pageNum}.${extension}`, blob);
         }
 
-        // Clean up canvas
-        canvas.width = 0;
-        canvas.height = 0;
-
         processedCount++;
         onProgress((processedCount / numPages) * 100);
     } catch (error) {
@@ -84,10 +75,15 @@ export const convertPdfToImages = async (
 
   // Worker function to process pages from the queue
   const worker = async () => {
+    // Create a shared canvas for this worker to be reused across pages
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('Could not create canvas context');
+
     while (currentIndex < pageNumbers.length) {
       const pageNum = pageNumbers[currentIndex];
       currentIndex++;
-      await processPage(pageNum);
+      await processPage(pageNum, canvas, context);
     }
   };
 
