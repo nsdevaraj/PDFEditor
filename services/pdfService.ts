@@ -6,8 +6,8 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = `https://esm.sh/pdfjs-dist@4.0.379/buil
 
 const getConcurrencyLimit = () => {
   if (typeof navigator !== 'undefined' && navigator.hardwareConcurrency) {
-    // 2x hardware threads to account for IO wait times, max 16 to avoid flooding
-    return Math.min(navigator.hardwareConcurrency * 2, 16);
+    // Use hardware threads count directly to avoid context switching overhead
+    return Math.max(1, navigator.hardwareConcurrency);
   }
   return 4; // Conservative default
 };
