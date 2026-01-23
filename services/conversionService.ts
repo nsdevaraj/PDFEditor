@@ -348,9 +348,9 @@ export const convertPPTToPDF = async (file: File): Promise<Blob> => {
     }
   }
 
+  // Optimization: removed .map() to avoid array allocation
   const slideFiles = slideFilesData
-    .sort((a, b) => a.num - b.num)
-    .map(item => item.name);
+    .sort((a, b) => a.num - b.num);
 
   if (slideFiles.length === 0) {
       throw new Error("No slides found in this PowerPoint file.");
@@ -361,7 +361,7 @@ export const convertPPTToPDF = async (file: File): Promise<Blob> => {
   for (let i = 0; i < slideFiles.length; i++) {
       if (i > 0) pdf.addPage();
 
-      const xmlStr = await zip.file(slideFiles[i])?.async("string");
+      const xmlStr = await zip.file(slideFiles[i].name)?.async("string");
       if (!xmlStr) continue;
 
       const xmlDoc = parser.parseFromString(xmlStr, "application/xml");
