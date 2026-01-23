@@ -10,8 +10,7 @@ import JSZip from 'jszip';
 // Configure PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
-const slideNameRegex = /slide(\d+)\.xml/;
-const slidePathRegex = /ppt\/slides\/slide\d+\.xml/;
+const slideRegex = /ppt\/slides\/slide(\d+)\.xml/;
 
 interface TextItem {
   str: string;
@@ -331,11 +330,11 @@ export const convertPPTToPDF = async (file: File): Promise<Blob> => {
   const slideFilesData: { name: string; num: number }[] = [];
 
   for (const name of allFiles) {
-    if (slidePathRegex.test(name)) {
-      const match = name.match(slideNameRegex);
+    const match = name.match(slideRegex);
+    if (match) {
       slideFilesData.push({
         name,
-        num: match ? parseInt(match[1]) : 0
+        num: parseInt(match[1])
       });
     }
   }
