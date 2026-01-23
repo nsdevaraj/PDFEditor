@@ -10,21 +10,11 @@ import JSZip from 'jszip';
 // Configure PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
-interface TextItem {
-  str: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
 const getPDFDocument = async (file: File) => {
   const arrayBuffer = await file.arrayBuffer();
   const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) });
   return await loadingTask.promise;
 };
-
-const compareX = (a: TextItem, b: TextItem) => a.x - b.x;
 
 const getConcurrencyLimit = () => {
   if (typeof navigator !== 'undefined' && navigator.hardwareConcurrency) {
@@ -61,71 +51,73 @@ const processPagesInBatches = async <T>(
   return results;
 };
 
-const extractRowsFromPage = async (page: any): Promise<TextItem[][]> => {
+const extractRowsFromPage = async (page: any): Promise<string[][]> => {
     const viewport = page.getViewport({ scale: 1.0 });
     const textContent = await page.getTextContent();
-
-    // Extract text items with coordinates
     const len = textContent.items.length;
-    const items: TextItem[] = new Array(len);
+
+    // Use typed arrays to avoid object allocation for every item
+    const xs = new Float32Array(len);
+    const ys = new Float32Array(len);
+    const indices = new Uint32Array(len);
+    const strs = new Array(len);
 
     for (let i = 0; i < len; i++) {
         const item = textContent.items[i] as any;
         const tx = item.transform;
         // transform matrix: [scaleX, skewY, skewX, scaleY, translateX, translateY]
         // PDF coordinates start from bottom-left
-        items[i] = {
-            str: item.str,
-            x: tx[4],
-            y: viewport.height - tx[5], // Convert to top-down
-            width: item.width,
-            height: item.height || 10 // approximate height if missing
-        };
+        xs[i] = tx[4];
+        ys[i] = viewport.height - tx[5]; // Convert to top-down
+        strs[i] = item.str;
+        indices[i] = i;
     }
 
-    // Group by rows (Y coordinate) with tolerance
+    // Sort indices by Y
+    indices.sort((a, b) => ys[a] - ys[b]);
+
     const TOLERANCE = 5;
-    const rows: TextItem[][] = [];
+    const rows: string[][] = [];
 
-    // Sort by Y (top to bottom)
-    items.sort((a, b) => a.y - b.y);
-
-    let currentRow: TextItem[] = [];
+    let currentRow: number[] = []; // Store indices
     let currentY = -1;
     let isRowSorted = true;
     let lastX = -Infinity;
 
     if (len > 0) {
-        currentRow.push(items[0]);
-        currentY = items[0].y;
-        lastX = items[0].x;
+        currentRow.push(indices[0]);
+        currentY = ys[indices[0]];
+        lastX = xs[indices[0]];
 
         for (let i = 1; i < len; i++) {
-            const item = items[i];
-            if (Math.abs(item.y - currentY) <= TOLERANCE) {
+            const idx = indices[i];
+            const itemY = ys[idx];
+            const itemX = xs[idx];
+
+            if (Math.abs(itemY - currentY) <= TOLERANCE) {
                  if (isRowSorted) {
-                     if (item.x < lastX) {
+                     if (itemX < lastX) {
                         isRowSorted = false;
                      } else {
-                        lastX = item.x;
+                        lastX = itemX;
                      }
                  }
-                 currentRow.push(item);
+                 currentRow.push(idx);
             } else {
                  if (!isRowSorted) {
-                    currentRow.sort(compareX);
+                    currentRow.sort((a, b) => xs[a] - xs[b]);
                  }
-                 rows.push(currentRow);
-                 currentRow = [item];
-                 currentY = item.y;
-                 lastX = item.x;
+                 rows.push(currentRow.map(k => strs[k]));
+                 currentRow = [idx];
+                 currentY = itemY;
+                 lastX = itemX;
                  isRowSorted = true;
             }
         }
         if (!isRowSorted) {
-            currentRow.sort(compareX);
+            currentRow.sort((a, b) => xs[a] - xs[b]);
         }
-        rows.push(currentRow);
+        rows.push(currentRow.map(k => strs[k]));
     }
 
     return rows;
@@ -138,7 +130,7 @@ export const convertPDFToExcel = async (file: File): Promise<Blob> => {
   const processPage = async (pageNum: number) => {
     const page = await pdf.getPage(pageNum);
     const rows = await extractRowsFromPage(page);
-    return rows.map(row => row.map(item => item.str));
+    return rows;
   };
 
   const allPageRows = await processPagesInBatches(pdf, getConcurrencyLimit(), processPage);
@@ -207,7 +199,7 @@ export const convertPDFToWord = async (file: File): Promise<Blob> => {
   const processPage = async (pageNum: number) => {
     const page = await pdf.getPage(pageNum);
     const rows = await extractRowsFromPage(page);
-    return rows.map(row => row.map(item => item.str).join(' '));
+    return rows.map(row => row.join(' '));
   };
 
   const allPageRows = await processPagesInBatches(pdf, getConcurrencyLimit(), processPage);
