@@ -12,6 +12,8 @@ test.describe('Performance Benchmark: Compress PDF', () => {
   });
 
   test('Measure Compress PDF Duration', async ({ page }) => {
+    page.on('console', msg => console.log(`BROWSER LOG: ${msg.text()}`));
+
     // Navigate to Compress PDF tool
     await page.goto('/');
     await page.getByRole('button', { name: 'Convert' }).click();
