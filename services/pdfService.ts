@@ -4,6 +4,14 @@ import * as pdfjsLib from 'pdfjs-dist';
 // Configure PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://esm.sh/pdfjs-dist@4.0.379/build/pdf.worker.min.mjs`;
 
+const getConcurrencyLimit = () => {
+  if (typeof navigator !== 'undefined' && navigator.hardwareConcurrency) {
+    // 2x hardware threads to account for IO wait times, max 16 to avoid flooding
+    return Math.min(navigator.hardwareConcurrency * 2, 16);
+  }
+  return 4; // Conservative default
+};
+
 export const compressPDF = async (
   file: File,
   onProgress: (progress: number) => void
@@ -21,17 +29,24 @@ export const compressPDF = async (
         let pdfDoc: jsPDF | null = null;
 
         // Parallel processing setup
-        // Optimize concurrency based on hardware capabilities
-        const concurrency = typeof navigator !== 'undefined' && navigator.hardwareConcurrency
-            ? Math.min(navigator.hardwareConcurrency, 8)
-            : 4;
+        const concurrency = getConcurrencyLimit();
         let currentIndex = 1;
         let completedCount = 0;
         const pagesData = new Array(totalPages);
 
         const worker = async () => {
-             const canvas = document.createElement('canvas');
-             const context = canvas.getContext('2d');
+             let canvas: HTMLCanvasElement | OffscreenCanvas;
+             let context: any;
+             const useOffscreen = typeof OffscreenCanvas !== 'undefined';
+
+             if (useOffscreen) {
+                 canvas = new OffscreenCanvas(1, 1);
+                 context = canvas.getContext('2d');
+             } else {
+                 canvas = document.createElement('canvas');
+                 context = canvas.getContext('2d');
+             }
+
              if (!context) throw new Error('Canvas context not available');
 
              while (currentIndex <= totalPages) {
@@ -47,17 +62,21 @@ export const compressPDF = async (
 
                  await page.render({ canvasContext: context, viewport }).promise;
 
-                 // Compress to JPEG with 0.5 quality
-                 // Use toBlob to avoid blocking the main thread
-                 const blob = await new Promise<Blob | null>((resolve) => {
-                     canvas.toBlob(resolve, 'image/jpeg', 0.5);
-                 });
-                 if (!blob) {
-                     throw new Error('Blob creation failed during compression');
-                 }
+                 let imgData: Uint8Array;
 
-                 const buffer = await blob.arrayBuffer();
-                 const imgData = new Uint8Array(buffer);
+                 if (useOffscreen && (canvas instanceof OffscreenCanvas)) {
+                     const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.5 });
+                     const buffer = await blob.arrayBuffer();
+                     imgData = new Uint8Array(buffer);
+                 } else {
+                     // Compress to JPEG with 0.5 quality
+                     // Use toBlob to avoid blocking the main thread
+                     const blob = await new Promise<Blob | null>(resolve => (canvas as HTMLCanvasElement).toBlob(resolve, 'image/jpeg', 0.5));
+                     if (!blob) throw new Error('Blob creation failed');
+
+                     const buffer = await blob.arrayBuffer();
+                     imgData = new Uint8Array(buffer);
+                 }
 
                  // Calculate original page dimensions in points
                  const pdfPageWidth = viewport.width / renderScale;
@@ -120,14 +139,24 @@ export const flattenPDF = async (
         let pdfDoc: jsPDF | null = null;
 
         // Parallel processing setup
-        const concurrency = 4;
+        const concurrency = getConcurrencyLimit();
         let currentIndex = 1;
         let completedCount = 0;
         const pagesData = new Array(totalPages);
 
         const worker = async () => {
-             const canvas = document.createElement('canvas');
-             const context = canvas.getContext('2d');
+             let canvas: HTMLCanvasElement | OffscreenCanvas;
+             let context: any;
+             const useOffscreen = typeof OffscreenCanvas !== 'undefined';
+
+             if (useOffscreen) {
+                 canvas = new OffscreenCanvas(1, 1);
+                 context = canvas.getContext('2d');
+             } else {
+                 canvas = document.createElement('canvas');
+                 context = canvas.getContext('2d');
+             }
+
              if (!context) throw new Error('Canvas context not available');
 
              while (currentIndex <= totalPages) {
@@ -143,13 +172,21 @@ export const flattenPDF = async (
 
                  await page.render({ canvasContext: context, viewport }).promise;
 
-                 // Use PNG or high quality JPEG for flattening
-                 // Use toBlob to avoid blocking the main thread, then read as base64
-                 const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.95));
-                 if (!blob) throw new Error('Blob creation failed');
+                 let imgData: Uint8Array;
 
-                 const buffer = await blob.arrayBuffer();
-                 const imgData = new Uint8Array(buffer);
+                 if (useOffscreen && (canvas instanceof OffscreenCanvas)) {
+                     const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.95 });
+                     const buffer = await blob.arrayBuffer();
+                     imgData = new Uint8Array(buffer);
+                 } else {
+                     // Use PNG or high quality JPEG for flattening
+                     // Use toBlob to avoid blocking the main thread, then read as base64
+                     const blob = await new Promise<Blob | null>(resolve => (canvas as HTMLCanvasElement).toBlob(resolve, 'image/jpeg', 0.95));
+                     if (!blob) throw new Error('Blob creation failed');
+
+                     const buffer = await blob.arrayBuffer();
+                     imgData = new Uint8Array(buffer);
+                 }
 
                  // Calculate original page dimensions in points
                  const pdfPageWidth = viewport.width / renderScale;

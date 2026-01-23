@@ -24,15 +24,14 @@ export const convertPdfToImages = async (
   const extension = format === 'jpg' ? 'jpg' : format === 'tiff' ? 'tiff' : 'png';
   let processedCount = 0;
 
-  // Parallel processing configuration
-  // Increased concurrency to 4 and implemented a sliding window to keep the pipeline full
-  const CONCURRENCY = 4;
-  const pageNumbers = Array.from({ length: numPages }, (_, i) => i + 1);
-  let currentIndex = 0;
+  // Create a shared canvas to be reused across pages
+  const canvas = document.createElement('canvas');
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('Could not create canvas context');
 
-  const processPage = async (pageNum: number, canvas: HTMLCanvasElement, context: CanvasRenderingContext2D) => {
+  for (let i = 1; i <= numPages; i++) {
     try {
-        const page = await pdf.getPage(pageNum);
+        const page = await pdf.getPage(i);
         const viewport = page.getViewport({ scale: 2.0 }); // High quality
 
         canvas.width = viewport.width;
@@ -60,39 +59,18 @@ export const convertPdfToImages = async (
         }
 
         if (blob) {
-          zip.file(`page_${pageNum}.${extension}`, blob);
+          zip.file(`page_${i}.${extension}`, blob);
         }
 
         processedCount++;
         onProgress((processedCount / numPages) * 100);
     } catch (error) {
-        console.error(`Error processing page ${pageNum}`, error);
+        console.error(`Error processing page ${i}`, error);
         // Continue processing other pages
         processedCount++;
         onProgress((processedCount / numPages) * 100);
     }
-  };
-
-  // Worker function to process pages from the queue
-  const worker = async () => {
-    // Create a shared canvas for this worker to be reused across pages
-    const canvas = document.createElement('canvas');
-    const context = canvas.getContext('2d');
-    if (!context) throw new Error('Could not create canvas context');
-
-    while (currentIndex < pageNumbers.length) {
-      const pageNum = pageNumbers[currentIndex];
-      currentIndex++;
-      await processPage(pageNum, canvas, context);
-    }
-  };
-
-  // Start workers
-  const workers = Array(Math.min(CONCURRENCY, numPages))
-    .fill(null)
-    .map(() => worker());
-
-  await Promise.all(workers);
+  }
 
   // Generate zip
   const content = await zip.generateAsync({ type: 'blob' });
