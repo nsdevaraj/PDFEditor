@@ -43,6 +43,17 @@ export const SplitPDF: React.FC<SplitPDFProps> = ({
   const [isProcessing, setIsProcessing] = useState(false);
   const [rangeInput, setRangeInput] = useState('');
 
+  // Cleanup object URLs on unmount or when thumbnails change
+  useEffect(() => {
+    return () => {
+      thumbnails.forEach(t => {
+        if (t.dataUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(t.dataUrl);
+        }
+      });
+    };
+  }, [thumbnails]);
+
   useEffect(() => {
     const loadPdf = async () => {
       try {
@@ -58,27 +69,34 @@ export const SplitPDF: React.FC<SplitPDFProps> = ({
 
         const newThumbnails: PageThumbnail[] = [];
 
+        // Create canvas once to reuse
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+
+        if (!context) throw new Error("Canvas context not available");
+
         // Render thumbnails for each page
         for (let i = 1; i <= pdf.numPages; i++) {
           const page = await pdf.getPage(i);
           const viewport = page.getViewport({ scale: 0.3 }); // Small scale for thumbnails
 
-          const canvas = document.createElement('canvas');
-          const context = canvas.getContext('2d');
+          canvas.height = viewport.height;
+          canvas.width = viewport.width;
 
-          if (context) {
-            canvas.height = viewport.height;
-            canvas.width = viewport.width;
+          await page.render({
+            canvasContext: context,
+            viewport: viewport
+          }).promise;
 
-            await page.render({
-              canvasContext: context,
-              viewport: viewport
-            }).promise;
+          // Optimize: Use toBlob instead of toDataURL to avoid blocking main thread
+          const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.7));
 
+          if (blob) {
+            const url = URL.createObjectURL(blob);
             newThumbnails.push({
               pageIndex: i - 1,
               pageNumber: i,
-              dataUrl: canvas.toDataURL()
+              dataUrl: url
             });
           }
         }
