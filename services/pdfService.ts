@@ -58,8 +58,12 @@ export const compressPDF = async (
                  const renderScale = 1.5;
                  const viewport = page.getViewport({ scale: renderScale });
 
-                 canvas.width = viewport.width;
-                 canvas.height = viewport.height;
+                 if (canvas.width !== viewport.width || canvas.height !== viewport.height) {
+                     canvas.width = viewport.width;
+                     canvas.height = viewport.height;
+                 } else {
+                     context.clearRect(0, 0, canvas.width, canvas.height);
+                 }
 
                  await page.render({ canvasContext: context, viewport }).promise;
 
@@ -169,8 +173,12 @@ export const flattenPDF = async (
                  const renderScale = 2.0;
                  const viewport = page.getViewport({ scale: renderScale });
 
-                 canvas.width = viewport.width;
-                 canvas.height = viewport.height;
+                 if (canvas.width !== viewport.width || canvas.height !== viewport.height) {
+                     canvas.width = viewport.width;
+                     canvas.height = viewport.height;
+                 } else {
+                     context.clearRect(0, 0, canvas.width, canvas.height);
+                 }
 
                  await page.render({ canvasContext: context, viewport }).promise;
 
