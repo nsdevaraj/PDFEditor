@@ -47,6 +47,10 @@ export const performOCR = async (
 
     // Worker task function
     const runWorker = async (worker: Tesseract.Worker) => {
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        if (!context) throw new Error('Canvas context unavailable');
+
         while (queue.length > 0) {
             const pageIndex = queue.shift();
             if (pageIndex === undefined) break;
@@ -56,12 +60,13 @@ export const performOCR = async (
             const scale = 2.0;
             const viewport = page.getViewport({ scale: scale });
 
-            const canvas = document.createElement('canvas');
-            const context = canvas.getContext('2d');
-            if (!context) throw new Error('Canvas context unavailable');
-
-            canvas.height = viewport.height;
-            canvas.width = viewport.width;
+            // Reuse canvas
+            if (canvas.width !== viewport.width || canvas.height !== viewport.height) {
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+            } else {
+                context.clearRect(0, 0, canvas.width, canvas.height);
+            }
 
             await page.render({
                 canvasContext: context,
