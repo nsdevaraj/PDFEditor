@@ -132,7 +132,16 @@ export const flattenPDF = async (
                  await page.render({ canvasContext: context, viewport }).promise;
 
                  // Use PNG or high quality JPEG for flattening
-                 const imgData = canvas.toDataURL('image/jpeg', 0.95);
+                 // Use toBlob to avoid blocking the main thread, then read as base64
+                 const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.95));
+                 if (!blob) throw new Error('Blob creation failed');
+
+                 const reader = new FileReader();
+                 const imgData = await new Promise<string>((resolve, reject) => {
+                     reader.onload = () => resolve(reader.result as string);
+                     reader.onerror = reject;
+                     reader.readAsDataURL(blob);
+                 });
 
                  // Calculate original page dimensions in points
                  const pdfPageWidth = viewport.width / renderScale;
