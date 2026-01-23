@@ -106,35 +106,54 @@ export const flattenPDF = async (
         const totalPages = pdf.numPages;
 
         let pdfDoc: jsPDF | null = null;
-        const canvas = document.createElement('canvas');
-        const context = canvas.getContext('2d');
-        if (!context) throw new Error('Canvas context not available');
 
-        for (let i = 1; i <= totalPages; i++) {
-            const page = await pdf.getPage(i);
+        // Parallel processing setup
+        const concurrency = 4;
+        let currentIndex = 1;
+        let completedCount = 0;
+        const pagesData = new Array(totalPages);
 
-            // Render at higher scale for better quality (flattening shouldn't degrade quality too much)
-            const renderScale = 2.0;
-            const viewport = page.getViewport({ scale: renderScale });
+        const worker = async () => {
+             const canvas = document.createElement('canvas');
+             const context = canvas.getContext('2d');
+             if (!context) throw new Error('Canvas context not available');
 
-            canvas.width = viewport.width;
-            canvas.height = viewport.height;
+             while (currentIndex <= totalPages) {
+                 const i = currentIndex++;
 
-            await page.render({ canvasContext: context, viewport }).promise;
+                 const page = await pdf.getPage(i);
+                 // Render at higher scale for better quality (flattening shouldn't degrade quality too much)
+                 const renderScale = 2.0;
+                 const viewport = page.getViewport({ scale: renderScale });
 
-            // Use PNG or high quality JPEG for flattening
-            const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.95));
-            if (!blob) throw new Error('Failed to create blob from canvas');
-            const buffer = await blob.arrayBuffer();
-            const imgData = new Uint8Array(buffer);
+                 canvas.width = viewport.width;
+                 canvas.height = viewport.height;
 
-            // Calculate original page dimensions in points
-            const pdfPageWidth = viewport.width / renderScale;
-            const pdfPageHeight = viewport.height / renderScale;
+                 await page.render({ canvasContext: context, viewport }).promise;
 
-            const orientation = pdfPageWidth > pdfPageHeight ? 'l' : 'p';
+                 // Use PNG or high quality JPEG for flattening
+                 const imgData = canvas.toDataURL('image/jpeg', 0.95);
 
-            if (!pdfDoc) {
+                 // Calculate original page dimensions in points
+                 const pdfPageWidth = viewport.width / renderScale;
+                 const pdfPageHeight = viewport.height / renderScale;
+                 const orientation = pdfPageWidth > pdfPageHeight ? 'l' : 'p';
+
+                 pagesData[i - 1] = { imgData, pdfPageWidth, pdfPageHeight, orientation };
+
+                 completedCount++;
+                 onProgress((completedCount / totalPages) * 100);
+             }
+        };
+
+        // Run workers
+        await Promise.all(Array.from({ length: Math.min(concurrency, totalPages) }, worker));
+
+        // Assemble PDF sequentially to ensure order
+        for (const pageData of pagesData) {
+            if (!pageData) continue;
+            const { imgData, pdfPageWidth, pdfPageHeight, orientation } = pageData;
+             if (!pdfDoc) {
                 pdfDoc = new jsPDF({
                     orientation: orientation,
                     unit: 'pt',
@@ -143,11 +162,7 @@ export const flattenPDF = async (
             } else {
                 pdfDoc.addPage([pdfPageWidth, pdfPageHeight], orientation);
             }
-
-            // Add image to the PDF page
             pdfDoc.addImage(imgData, 'JPEG', 0, 0, pdfPageWidth, pdfPageHeight, undefined, 'FAST');
-
-            onProgress((i / totalPages) * 100);
         }
 
         if (pdfDoc) {

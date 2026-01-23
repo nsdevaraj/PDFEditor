@@ -68,35 +68,31 @@ export const performOCR = async (
                 viewport: viewport,
             }).promise;
 
-            // Convert canvas to blob asynchronously to avoid blocking main thread
-            const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
-            if (!blob) throw new Error('Canvas conversion failed');
-
-            // Start OCR and Base64 conversion in parallel
-            // Tesseract accepts Blob directly, so we don't need to wait for Base64
-            const ocrPromise = worker.recognize(blob);
-
-            // We still need Base64 for jsPDF later
-            const base64Promise = new Promise<string>((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result as string);
-                reader.onerror = reject;
-                reader.readAsDataURL(blob);
+            // Use canvas.toBlob instead of toDataURL to avoid blocking the main thread
+            const blob = await new Promise<Blob>((resolve, reject) => {
+              canvas.toBlob((b) => {
+                if (b) resolve(b);
+                else reject(new Error('Canvas to Blob failed'));
+              }, 'image/png');
             });
 
-            const [result, imageData] = await Promise.all([ocrPromise, base64Promise]);
+            // Convert blob to base64 asynchronously for PDF generation later
+            const base64Data = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(reader.result as string);
+              reader.onerror = reject;
+              reader.readAsDataURL(blob);
+            });
 
-            // Extract lines from blocks if not directly available (Tesseract v5+ change)
-            const lines = result.data.lines || (result.data.blocks || []).flatMap((b: any) =>
-                (b.paragraphs || []).flatMap((p: any) => p.lines || [])
-            );
+            // Perform OCR using the blob
+            const result = await worker.recognize(blob);
 
             // Store result
             results[pageIndex - 1] = {
-                imageData,
+                imageData: base64Data,
                 widthPt: viewport.width / scale,
                 heightPt: viewport.height / scale,
-                lines: lines,
+                lines: result.data?.lines || [],
                 pageIndex
             };
 

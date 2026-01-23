@@ -25,8 +25,10 @@ export const convertPdfToImages = async (
   let processedCount = 0;
 
   // Parallel processing configuration
-  const CONCURRENCY = 3;
+  // Increased concurrency to 4 and implemented a sliding window to keep the pipeline full
+  const CONCURRENCY = 4;
   const pageNumbers = Array.from({ length: numPages }, (_, i) => i + 1);
+  let currentIndex = 0;
 
   const processPage = async (pageNum: number) => {
     try {
@@ -80,11 +82,21 @@ export const convertPdfToImages = async (
     }
   };
 
-  // Process pages in batches
-  for (let i = 0; i < pageNumbers.length; i += CONCURRENCY) {
-    const batch = pageNumbers.slice(i, i + CONCURRENCY);
-    await Promise.all(batch.map(pageNum => processPage(pageNum)));
-  }
+  // Worker function to process pages from the queue
+  const worker = async () => {
+    while (currentIndex < pageNumbers.length) {
+      const pageNum = pageNumbers[currentIndex];
+      currentIndex++;
+      await processPage(pageNum);
+    }
+  };
+
+  // Start workers
+  const workers = Array(Math.min(CONCURRENCY, numPages))
+    .fill(null)
+    .map(() => worker());
+
+  await Promise.all(workers);
 
   // Generate zip
   const content = await zip.generateAsync({ type: 'blob' });
