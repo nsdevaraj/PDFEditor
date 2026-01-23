@@ -95,18 +95,23 @@ const extractRowsFromPage = async (page: any): Promise<TextItem[][]> => {
     let currentRow: TextItem[] = [];
     let currentY = -1;
     let isRowSorted = true;
+    let lastX = -Infinity;
 
     if (len > 0) {
         currentRow.push(items[0]);
         currentY = items[0].y;
+        lastX = items[0].x;
 
         for (let i = 1; i < len; i++) {
             const item = items[i];
             if (Math.abs(item.y - currentY) <= TOLERANCE) {
-                 if (isRowSorted && item.x < currentRow[currentRow.length - 1].x) {
-                    isRowSorted = false;
+                 if (isRowSorted) {
+                     if (item.x < lastX) {
+                        isRowSorted = false;
+                     }
                  }
                  currentRow.push(item);
+                 lastX = item.x;
             } else {
                  if (!isRowSorted) {
                     currentRow.sort(compareX);
@@ -114,6 +119,7 @@ const extractRowsFromPage = async (page: any): Promise<TextItem[][]> => {
                  rows.push(currentRow);
                  currentRow = [item];
                  currentY = item.y;
+                 lastX = item.x;
                  isRowSorted = true;
             }
         }
