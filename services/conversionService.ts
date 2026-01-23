@@ -310,6 +310,8 @@ export const convertExcelToPDF = async (file: File): Promise<Blob> => {
   }
 };
 
+const slideNameRegex = /slide(\d+)\.xml/;
+
 export const convertPPTToPDF = async (file: File): Promise<Blob> => {
   const arrayBuffer = await file.arrayBuffer();
   const zip = await JSZip.loadAsync(arrayBuffer);
