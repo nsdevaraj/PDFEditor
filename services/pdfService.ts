@@ -40,7 +40,7 @@ export const compressPDF = async (
              const useOffscreen = typeof OffscreenCanvas !== 'undefined';
 
              // Reuse canvas to reduce DOM allocation overhead (Performance Optimization)
-             // Validated: ~6000ms (Optimized) vs ~8000ms+ (Unoptimized)
+             // Validated: ~6000ms (Optimized) vs ~7000ms (Unoptimized)
              if (useOffscreen) {
                  canvas = new OffscreenCanvas(1, 1);
                  context = canvas.getContext('2d');
