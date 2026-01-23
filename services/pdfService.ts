@@ -21,7 +21,10 @@ export const compressPDF = async (
         let pdfDoc: jsPDF | null = null;
 
         // Parallel processing setup
-        const concurrency = 4;
+        // Optimize concurrency based on hardware capabilities
+        const concurrency = typeof navigator !== 'undefined' && navigator.hardwareConcurrency
+            ? Math.min(navigator.hardwareConcurrency, 8)
+            : 4;
         let currentIndex = 1;
         let completedCount = 0;
         const pagesData = new Array(totalPages);
@@ -46,8 +49,12 @@ export const compressPDF = async (
 
                  // Compress to JPEG with 0.5 quality
                  // Use toBlob to avoid blocking the main thread
-                 const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.5));
-                 if (!blob) throw new Error('Blob creation failed');
+                 const blob = await new Promise<Blob | null>((resolve) => {
+                     canvas.toBlob(resolve, 'image/jpeg', 0.5);
+                 });
+                 if (!blob) {
+                     throw new Error('Blob creation failed during compression');
+                 }
 
                  const buffer = await blob.arrayBuffer();
                  const imgData = new Uint8Array(buffer);
