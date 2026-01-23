@@ -36,7 +36,14 @@ export const compressPDF = async (
             await page.render({ canvasContext: context, viewport }).promise;
 
             // Compress to JPEG with 0.5 quality
-            const imgData = canvas.toDataURL('image/jpeg', 0.5);
+            const blob = await new Promise<Blob | null>((resolve) =>
+                canvas.toBlob(resolve, 'image/jpeg', 0.5)
+            );
+
+            if (!blob) throw new Error('Compression failed');
+
+            const buffer = await blob.arrayBuffer();
+            const imgData = new Uint8Array(buffer);
 
             // Calculate original page dimensions in points
             const pdfPageWidth = viewport.width / renderScale;
@@ -56,6 +63,9 @@ export const compressPDF = async (
 
             // Add image to the PDF page
             pdfDoc.addImage(imgData, 'JPEG', 0, 0, pdfPageWidth, pdfPageHeight, undefined, 'FAST');
+
+            // Release page resources
+            page.cleanup();
 
             onProgress((i / totalPages) * 100);
         }
