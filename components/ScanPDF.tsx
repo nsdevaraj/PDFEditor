@@ -24,6 +24,23 @@ export const ScanPDF: React.FC<ScanPDFProps> = ({ onClose }) => {
   const [error, setError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const capturedImagesRef = useRef<string[]>([]);
+
+  // Keep ref in sync for cleanup
+  useEffect(() => {
+    capturedImagesRef.current = capturedImages;
+  }, [capturedImages]);
+
+  // Cleanup blob URLs on unmount
+  useEffect(() => {
+    return () => {
+      capturedImagesRef.current.forEach(url => {
+        if (url.startsWith('blob:')) {
+          URL.revokeObjectURL(url);
+        }
+      });
+    };
+  }, []);
 
   const startCamera = async () => {
     try {
@@ -64,34 +81,53 @@ export const ScanPDF: React.FC<ScanPDFProps> = ({ onClose }) => {
       const ctx = canvas.getContext('2d');
       if (ctx) {
         ctx.drawImage(videoRef.current, 0, 0);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-        setCapturedImages(prev => [...prev, dataUrl]);
+        // Use toBlob to avoid blocking main thread
+        canvas.toBlob((blob) => {
+          if (blob) {
+            const url = URL.createObjectURL(blob);
+            setCapturedImages(prev => [...prev, url]);
+          }
+        }, 'image/jpeg', 0.8);
       }
     }
   };
 
   const removeImage = (index: number) => {
+    const url = capturedImages[index];
+    if (url.startsWith('blob:')) {
+      URL.revokeObjectURL(url);
+    }
     setCapturedImages(prev => prev.filter((_, i) => i !== index));
   };
 
-  const handleGeneratePDF = () => {
+  const handleGeneratePDF = async () => {
     if (capturedImages.length === 0) return;
     setIsProcessing(true);
 
     try {
       const pdf = new jsPDF();
 
-      capturedImages.forEach((imgData, index) => {
-        if (index > 0) {
+      for (let i = 0; i < capturedImages.length; i++) {
+        const imgData = capturedImages[i];
+        if (i > 0) {
           pdf.addPage();
         }
 
-        const imgProps = pdf.getImageProperties(imgData);
+        // Load image to get dimensions (since we used blob URL)
+        const img = new Image();
+        img.src = imgData;
+        await new Promise((resolve, reject) => {
+          img.onload = resolve;
+          img.onerror = reject;
+        });
+
+        const imgWidth = img.width;
+        const imgHeight = img.height;
         const pdfWidth = pdf.internal.pageSize.getWidth();
         const pdfHeight = pdf.internal.pageSize.getHeight();
 
         // Calculate dimensions to fit page while maintaining aspect ratio
-        const ratio = imgProps.width / imgProps.height;
+        const ratio = imgWidth / imgHeight;
         let w = pdfWidth;
         let h = w / ratio;
 
@@ -103,8 +139,8 @@ export const ScanPDF: React.FC<ScanPDFProps> = ({ onClose }) => {
         const x = (pdfWidth - w) / 2;
         const y = (pdfHeight - h) / 2;
 
-        pdf.addImage(imgData, 'JPEG', x, y, w, h);
-      });
+        pdf.addImage(img, 'JPEG', x, y, w, h);
+      }
 
       const blob = pdf.output('blob');
       saveAs(blob, `scanned_document_${new Date().toISOString().slice(0, 10)}.pdf`);
