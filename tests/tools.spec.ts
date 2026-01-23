@@ -86,6 +86,13 @@ test.describe('PDF Tools', () => {
     await expect(page.getByText('Conversion Complete!')).toBeVisible({ timeout: 45000 });
   });
 
+  test('Flatten PDF', async ({ page }) => {
+    await page.getByText('Flatten PDF').click();
+    const fileInput = page.locator('input[type="file"]');
+    await fileInput.setInputFiles(SAMPLE_PDF_PATH);
+    await expect(page.getByText('Conversion Complete!')).toBeVisible({ timeout: 45000 });
+  });
+
   test('Protect PDF', async ({ page }) => {
     // test.skip(true, 'Skipping Protect PDF as the installed pdf-lib version does not support encryption.');
 
