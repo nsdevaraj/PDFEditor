@@ -126,16 +126,14 @@ export const convertPDFToExcel = async (file: File): Promise<Blob> => {
 
   const processPage = async (pageNum: number) => {
     const page = await pdf.getPage(pageNum);
-    return await extractRowsFromPage(page);
+    const rows = await extractRowsFromPage(page);
+    return rows.map(row => row.map(item => item.str));
   };
 
   const allPageRows = await processPagesInBatches(pdf, getConcurrencyLimit(), processPage);
 
-  allPageRows.forEach((rows, index) => {
+  allPageRows.forEach((sheetData, index) => {
     const pageNum = index + 1;
-    // Convert to array of arrays for XLSX
-    const sheetData: string[][] = rows.map(row => row.map(item => item.str));
-
     const ws = XLSX.utils.aoa_to_sheet(sheetData);
     XLSX.utils.book_append_sheet(wb, ws, `Page ${pageNum}`);
   });
@@ -197,7 +195,8 @@ export const convertPDFToWord = async (file: File): Promise<Blob> => {
 
   const processPage = async (pageNum: number) => {
     const page = await pdf.getPage(pageNum);
-    return await extractRowsFromPage(page);
+    const rows = await extractRowsFromPage(page);
+    return rows.map(row => row.map(item => item.str).join(' '));
   };
 
   const allPageRows = await processPagesInBatches(pdf, getConcurrencyLimit(), processPage);
@@ -206,8 +205,7 @@ export const convertPDFToWord = async (file: File): Promise<Blob> => {
 
   allPageRows.forEach((rows, index) => {
     // If there are rows, add them as paragraphs
-    rows.forEach(row => {
-      const text = row.map(item => item.str).join(' ');
+    rows.forEach(text => {
       if (text.trim()) {
         allChildren.push(new Paragraph({
           children: [new TextRun(text)],
