@@ -191,7 +191,8 @@ export const flattenPDF = async (
                  } else {
                      // Use PNG or high quality JPEG for flattening
                      // Use toBlob to avoid blocking the main thread
-                     // Verified performance improvement over toDataURL (prevents main thread blocking)
+                     // Performance Note: While toDataURL is faster in raw throughput, toBlob prevents
+                     // main thread blocking, ensuring the UI remains responsive during processing.
                      blob = await new Promise<Blob | null>(resolve => (canvas as HTMLCanvasElement).toBlob(resolve, 'image/jpeg', 0.95));
                  }
 
