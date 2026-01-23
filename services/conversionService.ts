@@ -308,6 +308,8 @@ export const convertExcelToPDF = async (file: File): Promise<Blob> => {
   }
 };
 
+const slideNameRegex = /slide(\d+)\.xml/;
+
 export const convertPPTToPDF = async (file: File): Promise<Blob> => {
   const arrayBuffer = await file.arrayBuffer();
   const zip = await JSZip.loadAsync(arrayBuffer);
@@ -319,7 +321,6 @@ export const convertPPTToPDF = async (file: File): Promise<Blob> => {
   const slideFiles = Object.keys(zip.files).filter(name => name.match(/ppt\/slides\/slide\d+\.xml/));
 
   // Sort numerically
-  const slideNameRegex = /slide(\d+)\.xml/;
   slideFiles.sort((a, b) => {
       const numA = parseInt(a.match(slideNameRegex)![1]);
       const numB = parseInt(b.match(slideNameRegex)![1]);
