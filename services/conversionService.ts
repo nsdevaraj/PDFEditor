@@ -319,15 +319,20 @@ export const convertPPTToPDF = async (file: File): Promise<Blob> => {
 
   // Try to find slides in ppt/slides/slideX.xml
   // And map relationships to find order, but simple approach: filter files
-  const slideFiles = Object.keys(zip.files)
-    .filter(name => slidePathRegex.test(name))
-    .map(name => {
+  const allFiles = Object.keys(zip.files);
+  const slideFilesData: { name: string; num: number }[] = [];
+
+  for (const name of allFiles) {
+    if (slidePathRegex.test(name)) {
       const match = name.match(slideNameRegex);
-      return {
+      slideFilesData.push({
         name,
         num: match ? parseInt(match[1]) : 0
-      };
-    })
+      });
+    }
+  }
+
+  const slideFiles = slideFilesData
     .sort((a, b) => a.num - b.num)
     .map(item => item.name);
 
