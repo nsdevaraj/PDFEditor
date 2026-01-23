@@ -329,6 +329,11 @@ export const convertPPTToPDF = async (file: File): Promise<Blob> => {
   const allFiles = Object.keys(zip.files);
   const slideFilesData: { name: string; num: number }[] = [];
 
+  // Optimized Loop-Sort-Map:
+  // 1. Iterate once to filter and extract slide numbers using a constant regex (slideRegex).
+  // 2. Sort the lightweight object array by number.
+  // 3. Map back to filenames.
+  // This avoids re-running regex and parseInt during the sort comparison (O(N) vs O(N log N)).
   for (const name of allFiles) {
     const match = name.match(slideRegex);
     if (match) {
