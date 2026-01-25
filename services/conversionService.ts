@@ -1,11 +1,10 @@
 import * as pdfjsLib from 'pdfjs-dist';
-import * as XLSX from 'xlsx';
-import PptxGenJS from 'pptxgenjs';
-import { Document, Packer, Paragraph, TextRun } from 'docx';
-import mammoth from 'mammoth';
-import html2canvas from 'html2canvas';
+// Heavy libraries are now lazy-loaded via dynamic imports to reduce initial bundle size
 import { jsPDF } from 'jspdf';
 import JSZip from 'jszip';
+
+// Import types only
+import type { Paragraph } from 'docx';
 
 // Configure PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
@@ -124,6 +123,7 @@ const extractRowsFromPage = async (page: any): Promise<string[][]> => {
 };
 
 export const convertPDFToExcel = async (file: File): Promise<Blob> => {
+  const XLSX = await import('xlsx');
   const pdf = await getPDFDocument(file);
   const wb = XLSX.utils.book_new();
 
@@ -147,6 +147,7 @@ export const convertPDFToExcel = async (file: File): Promise<Blob> => {
 };
 
 export const convertPDFToPPT = async (file: File): Promise<Blob> => {
+  const { default: PptxGenJS } = await import('pptxgenjs');
   const pdf = await getPDFDocument(file);
   const pptx = new PptxGenJS();
 
@@ -194,6 +195,7 @@ export const convertPDFToPPT = async (file: File): Promise<Blob> => {
 };
 
 export const convertPDFToWord = async (file: File): Promise<Blob> => {
+  const { Document, Packer, Paragraph, TextRun } = await import('docx');
   const pdf = await getPDFDocument(file);
 
   const processPage = async (pageNum: number) => {
@@ -221,10 +223,6 @@ export const convertPDFToWord = async (file: File): Promise<Blob> => {
     if (index + 1 < pdf.numPages) {
       // docx automatically handles pagination, but we can force a break if we want strict page mapping.
       // For flowable documents (Word), letting it flow is usually better, but let's add a visual separator or empty line if needed.
-      // Actually, maybe we can add a page break run?
-      // new Paragraph({ children: [new TextRun({ break: 1 })] }) is a line break.
-      // Page break: new Paragraph({ children: [new PageBreak()] }) - wait, check docx API.
-      // It seems simpler to just let it flow for now.
     }
   });
 
@@ -243,6 +241,12 @@ export const convertPDFToWord = async (file: File): Promise<Blob> => {
 // --- New Conversions (To PDF) ---
 
 export const convertWordToPDF = async (file: File): Promise<Blob> => {
+  const { default: mammoth } = await import('mammoth');
+  const { default: html2canvas } = await import('html2canvas');
+  if (typeof window !== 'undefined') {
+      (window as any).html2canvas = html2canvas;
+  }
+
   const arrayBuffer = await file.arrayBuffer();
   // mammoth converts docx to HTML
   const result = await mammoth.convertToHtml({ arrayBuffer });
@@ -266,7 +270,7 @@ export const convertWordToPDF = async (file: File): Promise<Blob> => {
         x: 10,
         y: 10,
         width: 575, // A4 width (~595pt) - margins
-        windowWidth: 800 // match element width
+        windowWidth: 800, // match element width
       });
     });
 
@@ -277,6 +281,12 @@ export const convertWordToPDF = async (file: File): Promise<Blob> => {
 };
 
 export const convertExcelToPDF = async (file: File): Promise<Blob> => {
+  const XLSX = await import('xlsx');
+  const { default: html2canvas } = await import('html2canvas');
+  if (typeof window !== 'undefined') {
+      (window as any).html2canvas = html2canvas;
+  }
+
   const arrayBuffer = await file.arrayBuffer();
   const wb = XLSX.read(arrayBuffer, { type: 'array' });
 
@@ -309,7 +319,7 @@ export const convertExcelToPDF = async (file: File): Promise<Blob> => {
         x: 10,
         y: 10,
         width: 820, // A4 Landscape width (~842pt) - margins
-        windowWidth: 1000
+        windowWidth: 1000,
       });
     });
 
@@ -435,6 +445,10 @@ export const convertImageToPDF = async (file: File): Promise<Blob> => {
 };
 
 export const convertHTMLToPDF = async (content: string, isUrl: boolean = false): Promise<Blob> => {
+    const { default: html2canvas } = await import('html2canvas');
+    if (typeof window !== 'undefined') {
+        (window as any).html2canvas = html2canvas;
+    }
     let htmlContent = content;
 
     // If it is a URL, we can't easily fetch it client-side due to CORS unless we have a proxy.
@@ -460,7 +474,7 @@ export const convertHTMLToPDF = async (content: string, isUrl: boolean = false):
                 x: 10,
                 y: 10,
                 width: 575,
-                windowWidth: 800
+                windowWidth: 800,
             });
         });
         return pdf.output('blob');
