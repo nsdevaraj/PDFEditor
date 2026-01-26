@@ -1,7 +1,4 @@
-import React, { useState, useRef } from 'react';
-import { PDFDocument } from 'pdf-lib';
-import { encryptPDF } from '@pdfsmaller/pdf-encrypt-lite';
-import { validatePDFCompliance } from '../services/geminiService';
+import React, { useState, useRef, Suspense } from 'react';
 import { 
   FileText, 
   Image, 
@@ -29,28 +26,16 @@ import {
   Layers,
   Camera
 } from 'lucide-react';
-import { compressPDF, flattenPDF } from '../services/pdfService';
-import { repairPDF } from '../services/repairService';
-import {
-  convertPDFToExcel,
-  convertPDFToPPT,
-  convertPDFToWord,
-  convertWordToPDF,
-  convertExcelToPDF,
-  convertPPTToPDF,
-  convertImageToPDF,
-  convertHTMLToPDF
-} from '../services/conversionService';
 import { UploadedFile } from '../types';
-import { SplitPDF } from './SplitPDF';
-import { ScanPDF } from './ScanPDF';
-import { RotatePDF } from './RotatePDF';
-import { OrganizePDF } from './OrganizePDF';
-import { PageNumbersPDF } from './PageNumbersPDF';
-import { CropPDF } from './CropPDF';
-import { ComparePDF } from './ComparePDF';
-import { convertPdfToImages } from '../utils/pdfConverter';
-import { performOCR } from '../services/ocrService';
+
+// Lazy load sub-components
+const SplitPDF = React.lazy(() => import('./SplitPDF').then(m => ({ default: m.SplitPDF })));
+const ScanPDF = React.lazy(() => import('./ScanPDF').then(m => ({ default: m.ScanPDF })));
+const RotatePDF = React.lazy(() => import('./RotatePDF').then(m => ({ default: m.RotatePDF })));
+const OrganizePDF = React.lazy(() => import('./OrganizePDF').then(m => ({ default: m.OrganizePDF })));
+const PageNumbersPDF = React.lazy(() => import('./PageNumbersPDF').then(m => ({ default: m.PageNumbersPDF })));
+const CropPDF = React.lazy(() => import('./CropPDF').then(m => ({ default: m.CropPDF })));
+const ComparePDF = React.lazy(() => import('./ComparePDF').then(m => ({ default: m.ComparePDF })));
 
 export const ToolsGrid: React.FC = () => {
   const [activeTool, setActiveTool] = useState<any>(null);
@@ -142,6 +127,7 @@ export const ToolsGrid: React.FC = () => {
       setFileName('content.pdf');
       setProgress(20);
       try {
+          const { convertHTMLToPDF } = await import('../services/conversionService');
           const blob = await convertHTMLToPDF(htmlContent);
           setResultBlob(blob);
           const url = URL.createObjectURL(blob);
@@ -202,6 +188,7 @@ export const ToolsGrid: React.FC = () => {
             const buffer = await file.arrayBuffer();
             try {
                 // Attempt to load without password first (in case it's just owner password or no password)
+                const { PDFDocument } = await import('pdf-lib');
                 const pdfDoc = await PDFDocument.load(buffer);
                 // If loaded, save it (this removes encryption if it was just owner password)
                 const savedBytes = await pdfDoc.save();
@@ -228,6 +215,7 @@ export const ToolsGrid: React.FC = () => {
 
       try {
         if (activeTool.title === "PDF to Excel") {
+           const { convertPDFToExcel } = await import('../services/conversionService');
            const blob = await convertPDFToExcel(file);
            setResultBlob(blob);
            const url = URL.createObjectURL(blob);
@@ -235,6 +223,7 @@ export const ToolsGrid: React.FC = () => {
            setStatus('success');
            setProgress(100);
         } else if (activeTool.title === "PDF to PPT") {
+           const { convertPDFToPPT } = await import('../services/conversionService');
            const blob = await convertPDFToPPT(file);
            setResultBlob(blob);
            const url = URL.createObjectURL(blob);
@@ -242,6 +231,7 @@ export const ToolsGrid: React.FC = () => {
            setStatus('success');
            setProgress(100);
         } else if (activeTool.title === "PDF to Word") {
+           const { convertPDFToWord } = await import('../services/conversionService');
            const blob = await convertPDFToWord(file);
            setResultBlob(blob);
            const url = URL.createObjectURL(blob);
@@ -249,6 +239,7 @@ export const ToolsGrid: React.FC = () => {
            setStatus('success');
            setProgress(100);
         } else if (activeTool.title === "Word to PDF") {
+            const { convertWordToPDF } = await import('../services/conversionService');
             const blob = await convertWordToPDF(file);
             setResultBlob(blob);
             const url = URL.createObjectURL(blob);
@@ -256,6 +247,7 @@ export const ToolsGrid: React.FC = () => {
             setStatus('success');
             setProgress(100);
         } else if (activeTool.title === "Excel to PDF") {
+            const { convertExcelToPDF } = await import('../services/conversionService');
             const blob = await convertExcelToPDF(file);
             setResultBlob(blob);
             const url = URL.createObjectURL(blob);
@@ -263,6 +255,7 @@ export const ToolsGrid: React.FC = () => {
             setStatus('success');
             setProgress(100);
         } else if (activeTool.title === "PPT to PDF") {
+            const { convertPPTToPDF } = await import('../services/conversionService');
             const blob = await convertPPTToPDF(file);
             setResultBlob(blob);
             const url = URL.createObjectURL(blob);
@@ -270,6 +263,7 @@ export const ToolsGrid: React.FC = () => {
             setStatus('success');
             setProgress(100);
         } else if (activeTool.title === "JPG to PDF") {
+            const { convertImageToPDF } = await import('../services/conversionService');
             const blob = await convertImageToPDF(file);
             setResultBlob(blob);
             const url = URL.createObjectURL(blob);
@@ -277,8 +271,9 @@ export const ToolsGrid: React.FC = () => {
             setStatus('success');
             setProgress(100);
         } else if (activeTool.title === "HTML to PDF") {
-            // HTML File upload path
+             // HTML File upload path
              const text = await file.text();
+             const { convertHTMLToPDF } = await import('../services/conversionService');
              const blob = await convertHTMLToPDF(text);
              setResultBlob(blob);
              const url = URL.createObjectURL(blob);
@@ -286,18 +281,21 @@ export const ToolsGrid: React.FC = () => {
              setStatus('success');
              setProgress(100);
         } else if (activeTool.title === "Compress PDF") {
+           const { compressPDF } = await import('../services/pdfService');
            const blob = await compressPDF(file, (p) => setProgress(p));
            setResultBlob(blob);
            const url = URL.createObjectURL(blob);
            setDownloadUrl(url);
            setStatus('success');
         } else if (activeTool.title === "Flatten PDF") {
+           const { flattenPDF } = await import('../services/pdfService');
            const blob = await flattenPDF(file, (p) => setProgress(p));
            setResultBlob(blob);
            const url = URL.createObjectURL(blob);
            setDownloadUrl(url);
            setStatus('success');
         } else if (activeTool.title === "Repair PDF") {
+           const { repairPDF } = await import('../services/repairService');
            const blob = await repairPDF(file);
            setResultBlob(blob);
            const url = URL.createObjectURL(blob);
@@ -305,6 +303,7 @@ export const ToolsGrid: React.FC = () => {
            setStatus('success');
            setProgress(100);
         } else if (activeTool.title === 'OCR') {
+           const { performOCR } = await import('../services/ocrService');
            const blob = await performOCR(file, (p) => setProgress(p));
            setResultBlob(blob);
            const url = URL.createObjectURL(blob);
@@ -316,6 +315,7 @@ export const ToolsGrid: React.FC = () => {
            reader.onload = async (event) => {
              if (event.target && event.target.result) {
                const base64Data = (event.target.result as string).split(',')[1];
+               const { validatePDFCompliance } = await import('../services/geminiService');
                const report = await validatePDFCompliance(base64Data, file.type);
                setValidationResult(report);
                setStatus('success');
@@ -363,6 +363,7 @@ export const ToolsGrid: React.FC = () => {
       const pdfBytes = new Uint8Array(arrayBuffer);
 
       // Use @pdfsmaller/pdf-encrypt-lite for encryption
+      const { encryptPDF } = await import('@pdfsmaller/pdf-encrypt-lite');
       const encryptedBytes = await encryptPDF(pdfBytes, password, password);
 
       const blob = new Blob([encryptedBytes], { type: 'application/pdf' });
@@ -383,6 +384,7 @@ export const ToolsGrid: React.FC = () => {
     setProgress(0);
 
     try {
+      const { convertPdfToImages } = await import('../utils/pdfConverter');
       const result = await convertPdfToImages(selectedFile, outputFormat, (p) => {
         setProgress(p);
       });
@@ -402,6 +404,8 @@ export const ToolsGrid: React.FC = () => {
     setErrorMessage('');
 
     try {
+      const { PDFDocument } = await import('pdf-lib');
+      // @ts-ignore - pdf-lib types might be missing password option or it's a custom extension
       const pdfDoc = await PDFDocument.load(fileBuffer, { password });
       const savedBytes = await pdfDoc.save();
       const blob = new Blob([savedBytes], { type: 'application/pdf' });
@@ -514,29 +518,68 @@ export const ToolsGrid: React.FC = () => {
     }
   };
 
+  const LoadingFallback = () => (
+    <div className="flex flex-col items-center justify-center h-full text-slate-400">
+      <Loader2 className="w-12 h-12 animate-spin mb-4 text-blue-600" />
+      <p>Loading tool...</p>
+    </div>
+  );
+
   if (activeTool?.title === "Split PDF" && currentFile) {
-    return <SplitPDF file={currentFile} onClose={handleClose} />;
+    return (
+      <Suspense fallback={<LoadingFallback />}>
+        <SplitPDF file={currentFile} onClose={handleClose} />
+      </Suspense>
+    );
   }
   if (activeTool?.title === "Extract PDF Pages" && currentFile) {
-    return <SplitPDF file={currentFile} onClose={handleClose} title="Extract Pages" actionLabel="Extract Pages" />;
+    return (
+      <Suspense fallback={<LoadingFallback />}>
+        <SplitPDF file={currentFile} onClose={handleClose} title="Extract Pages" actionLabel="Extract Pages" />
+      </Suspense>
+    );
   }
   if (activeTool?.title === "Scan to PDF") {
-    return <ScanPDF onClose={handleClose} />;
+    return (
+      <Suspense fallback={<LoadingFallback />}>
+        <ScanPDF onClose={handleClose} />
+      </Suspense>
+    );
   }
   if (activeTool?.title === "Rotate PDF" && currentFile) {
-    return <RotatePDF file={currentFile} onClose={handleClose} />;
+    return (
+      <Suspense fallback={<LoadingFallback />}>
+        <RotatePDF file={currentFile} onClose={handleClose} />
+      </Suspense>
+    );
   }
   if (activeTool?.title === "Organize PDF" && currentFile) {
-    return <OrganizePDF file={currentFile} onClose={handleClose} />;
+    return (
+      <Suspense fallback={<LoadingFallback />}>
+        <OrganizePDF file={currentFile} onClose={handleClose} />
+      </Suspense>
+    );
   }
   if (activeTool?.title === "Page Numbers" && currentFile) {
-    return <PageNumbersPDF file={currentFile} onClose={handleClose} />;
+    return (
+      <Suspense fallback={<LoadingFallback />}>
+        <PageNumbersPDF file={currentFile} onClose={handleClose} />
+      </Suspense>
+    );
   }
   if (activeTool?.title === "Crop PDF" && currentFile) {
-    return <CropPDF file={currentFile} onClose={handleClose} />;
+    return (
+      <Suspense fallback={<LoadingFallback />}>
+        <CropPDF file={currentFile} onClose={handleClose} />
+      </Suspense>
+    );
   }
   if (activeTool?.title === "Compare PDF" && currentFile) {
-    return <ComparePDF file={currentFile} onClose={handleClose} />;
+    return (
+      <Suspense fallback={<LoadingFallback />}>
+        <ComparePDF file={currentFile} onClose={handleClose} />
+      </Suspense>
+    );
   }
 
   return (
