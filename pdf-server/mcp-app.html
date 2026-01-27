@@ -50,6 +50,9 @@
             </button>
           </div>
           <div class="toolbar-right">
+            <button id="tools-btn" class="nav-btn" title="Tools" style="display: none">
+              🛠️
+            </button>
             <button id="zoom-out-btn" class="zoom-btn" title="Zoom out (-)">
               −
             </button>
@@ -68,6 +71,19 @@
           <div class="page-wrapper">
             <canvas id="pdf-canvas"></canvas>
             <div id="text-layer" class="text-layer"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tools Modal -->
+      <div id="tools-modal" class="modal" style="display: none">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3>PDF Tools</h3>
+            <button id="close-tools-btn" class="close-btn">×</button>
+          </div>
+          <div id="tools-list" class="tools-grid">
+            <!-- Tools injected here -->
           </div>
         </div>
       </div>
