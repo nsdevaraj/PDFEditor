@@ -820,7 +820,20 @@ initToolsUI(
     },
     showLoading,
     hideLoading,
-    showError
+    showError,
+    async (filename: string, blob: Blob) => {
+        const buffer = await blob.arrayBuffer();
+        const base64 = btoa(
+            new Uint8Array(buffer).reduce(
+                (data, byte) => data + String.fromCharCode(byte),
+                ""
+            )
+        );
+        await app.callServerTool({
+            name: "save_file",
+            arguments: { filename, data: base64 },
+        });
+    }
 );
 
 // Connect to host
