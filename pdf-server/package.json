@@ -1,0 +1,48 @@
+{
+  "name": "@modelcontextprotocol/server-pdf",
+  "version": "1.0.1",
+  "type": "module",
+  "description": "MCP server for loading and extracting text from PDF files with chunked pagination and interactive viewer",
+  "license": "MIT",
+  "main": "dist/server.js",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc --noEmit && cross-env INPUT=mcp-app.html vite build && tsc -p tsconfig.server.json && esbuild server.ts --outfile=dist/server.js --platform=node --external:pdfjs-dist --format=esm --target=node22 --bundle --banner:js=\"import { createRequire } from 'module'; const require = createRequire(import.meta.url);\" && esbuild main.ts --outfile=dist/index.js --platform=node --external:./server.js --external:pdfjs-dist --banner:js=\"#!/usr/bin/env node\nimport { createRequire } from 'module'; const require = createRequire(import.meta.url);\" --format=esm --target=node22 --bundle",
+    "watch": "cross-env INPUT=mcp-app.html vite build --watch",
+    "serve": "esbuild main.ts --outfile=dist/index.js --platform=node --external:./server.js --external:pdfjs-dist --banner:js=\"#!/usr/bin/env node\nimport { createRequire } from 'module'; const require = createRequire(import.meta.url);\" --format=esm --target=node22 --bundle --watch",
+    "start": "cross-env NODE_ENV=development npm run build && node dist/index.js",
+    "dev": "cross-env NODE_ENV=development concurrently 'npm run watch' 'npm run serve'",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/ext-apps": "^1.0.0",
+    "@modelcontextprotocol/sdk": "^1.24.0",
+    "cors": "^2.8.5",
+    "express": "^5.0.0",
+    "pdfjs-dist": "^4.0.0",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.0.0",
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
+    "esbuild": "^0.20.0",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.12",
+    "vite-plugin-singlefile": "^2.0.1"
+  },
+  "types": "dist/server.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/server.d.ts",
+      "default": "./dist/server.js"
+    }
+  },
+  "bin": {
+    "mcp-pdf-server": "dist/index.js"
+  }
+}
