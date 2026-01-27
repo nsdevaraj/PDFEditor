@@ -34,7 +34,8 @@ function downloadBlob(blob: Blob, filename: string) {
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  // URL.revokeObjectURL(url); // Don't revoke immediately to allow manual click backup if needed
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
 // Helper to create a file input and wait for selection
@@ -120,6 +121,42 @@ export function initToolsUI(
     }
   };
 
+  // NEW: Success View Helper
+  const renderSuccessView = (blob: Blob, filename: string, back: () => void) => {
+      toolsList.innerHTML = '';
+      if (modalHeader) modalHeader.textContent = 'Success';
+
+      const container = document.createElement('div');
+      container.className = 'tool-view-container';
+      container.style.display = 'flex';
+      container.style.flexDirection = 'column';
+      container.style.alignItems = 'center';
+      container.style.padding = '2rem';
+      container.style.textAlign = 'center';
+
+      container.innerHTML = `
+        <div style="font-size: 3rem; margin-bottom: 1rem;">✅</div>
+        <h3 style="margin: 0 0 1rem 0; color: var(--text000);">Processing Complete</h3>
+        <p style="color: var(--text100); margin-bottom: 2rem;">Your file has been processed successfully.</p>
+        <button id="download-result-btn" class="tool-action-btn primary" style="margin-bottom: 1rem; width: 100%;">Download File</button>
+        <button id="back-to-tools-btn" class="nav-btn">Back to Tools</button>
+      `;
+
+      const downloadBtn = container.querySelector('#download-result-btn') as HTMLButtonElement;
+      const backBtn = container.querySelector('#back-to-tools-btn') as HTMLButtonElement;
+
+      downloadBtn.onclick = () => {
+          downloadBlob(blob, filename);
+      };
+
+      backBtn.onclick = back;
+
+      toolsList.appendChild(container);
+
+      // Auto-trigger download as well, just in case it works
+      downloadBlob(blob, filename);
+  };
+
   const renderToolView = (tool: ToolDef) => {
       toolsList.innerHTML = ''; // Clear list
       if (modalHeader) modalHeader.textContent = tool.name;
@@ -193,8 +230,7 @@ export function initToolsUI(
                 showLoading('Merging PDFs...');
                 try {
                     const blob = await mergePDFs(selectedFiles);
-                    downloadBlob(blob, 'merged.pdf');
-                    back();
+                    renderSuccessView(blob, 'merged.pdf', back);
                 } catch (e) {
                     showError(`Merge failed: ${e}`);
                 } finally {
@@ -226,8 +262,7 @@ export function initToolsUI(
                 showLoading('Splitting PDF...');
                 try {
                     const blob = await splitPDF(file, ranges);
-                    downloadBlob(blob, 'split.pdf');
-                    back();
+                    renderSuccessView(blob, 'split.pdf', back);
                 } catch (e) {
                     showError(`Split failed: ${e}`);
                 } finally {
@@ -259,8 +294,7 @@ export function initToolsUI(
                 showLoading('Extracting pages...');
                 try {
                     const blob = await extractPages(file, ranges);
-                    downloadBlob(blob, 'extracted.pdf');
-                    back();
+                    renderSuccessView(blob, 'extracted.pdf', back);
                 } catch (e) {
                     showError(`Extraction failed: ${e}`);
                 } finally {
@@ -294,8 +328,7 @@ export function initToolsUI(
                 showLoading('Organizing PDF...');
                 try {
                     const blob = await organizePDF(file, order);
-                    downloadBlob(blob, 'organized.pdf');
-                    back();
+                    renderSuccessView(blob, 'organized.pdf', back);
                 } catch (e) {
                     showError(`Organize failed: ${e}`);
                 } finally {
@@ -328,8 +361,7 @@ export function initToolsUI(
                     showLoading('Rotating PDF...');
                     try {
                         const blob = await rotatePDF(file, angle);
-                        downloadBlob(blob, 'rotated.pdf');
-                        back();
+                        renderSuccessView(blob, 'rotated.pdf', back);
                     } catch (e) {
                         showError(`Rotation failed: ${e}`);
                     } finally {
@@ -362,8 +394,7 @@ export function initToolsUI(
                 showLoading('Protecting PDF...');
                 try {
                     const blob = await protectPDF(file, password);
-                    downloadBlob(blob, 'protected.pdf');
-                    back();
+                    renderSuccessView(blob, 'protected.pdf', back);
                 } catch (e) {
                     showError(`Protection failed: ${e}`);
                 } finally {
@@ -408,8 +439,7 @@ export function initToolsUI(
                 showLoading('Unlocking PDF...');
                 try {
                     const blob = await unlockPDF(selectedFile, password);
-                    downloadBlob(blob, 'unlocked.pdf');
-                    back();
+                    renderSuccessView(blob, 'unlocked.pdf', back);
                 } catch (e) {
                     showError(`Unlock failed: ${e}`);
                 } finally {
@@ -428,7 +458,7 @@ export function initToolsUI(
         showLoading('Compressing PDF...');
         try {
           const blob = await compressPDF(file, (p) => showLoading(`Compressing: ${Math.round(p)}%`));
-          downloadBlob(blob, 'compressed.pdf');
+          renderSuccessView(blob, 'compressed.pdf', showList);
         } catch (e) {
           showError(`Compression failed: ${e}`);
         } finally {
@@ -446,7 +476,7 @@ export function initToolsUI(
         showLoading('Initializing OCR...');
         try {
           const blob = await performOCR(file, (p) => showLoading(`OCR Processing: ${Math.round(p)}%`));
-          downloadBlob(blob, 'ocr_result.pdf');
+          renderSuccessView(blob, 'ocr_result.pdf', showList);
         } catch (e) {
           showError(`OCR failed: ${e}`);
         } finally {
@@ -465,6 +495,7 @@ export function initToolsUI(
             try {
                 const isValid = await validatePDFA(file);
                 alert(isValid ? "Valid PDF/A Metadata found." : "Not a valid PDF/A (or metadata missing).");
+                showList();
             } catch (e) {
                 showError(`Validation failed: ${e}`);
             } finally {
@@ -481,7 +512,7 @@ export function initToolsUI(
              showLoading('Converting Image to PDF...');
              try {
                  const blob = await convertImageToPDF(file);
-                 downloadBlob(blob, file.name + '.pdf');
+                 renderSuccessView(blob, file.name + '.pdf', showList);
              } catch (e) {
                  showError(`Conversion failed: ${e}`);
              } finally {
@@ -499,7 +530,7 @@ export function initToolsUI(
             showLoading('Adding page numbers...');
             try {
                 const blob = await addPageNumbers(file);
-                downloadBlob(blob, 'numbered.pdf');
+                renderSuccessView(blob, 'numbered.pdf', showList);
             } catch (e) {
                 showError(`Failed to add page numbers: ${e}`);
             } finally {
@@ -519,7 +550,7 @@ export function initToolsUI(
             showLoading('Cropping PDF...');
             try {
                 const blob = await cropPDF(file);
-                downloadBlob(blob, 'cropped.pdf');
+                renderSuccessView(blob, 'cropped.pdf', showList);
             } catch (e) {
                 showError(`Crop failed: ${e}`);
             } finally {
@@ -536,7 +567,7 @@ export function initToolsUI(
             showLoading('Repairing PDF...');
             try {
                 const blob = await repairPDF(file);
-                downloadBlob(blob, 'repaired.pdf');
+                renderSuccessView(blob, 'repaired.pdf', showList);
             } catch (e) {
                 showError(`Repair failed: ${e}`);
             } finally {
@@ -554,7 +585,7 @@ export function initToolsUI(
         showLoading('Flattening PDF...');
         try {
           const blob = await flattenPDF(file, (p) => showLoading(`Flattening: ${Math.round(p)}%`));
-          downloadBlob(blob, 'flattened.pdf');
+          renderSuccessView(blob, 'flattened.pdf', showList);
         } catch (e) {
           showError(`Flattening failed: ${e}`);
         } finally {
@@ -572,7 +603,7 @@ export function initToolsUI(
         showLoading('Converting to Excel...');
         try {
           const blob = await convertPDFToExcel(file);
-          downloadBlob(blob, 'converted.xlsx');
+          renderSuccessView(blob, 'converted.xlsx', showList);
         } catch (e) {
           showError(`Conversion failed: ${e}`);
         } finally {
@@ -590,7 +621,7 @@ export function initToolsUI(
         showLoading('Converting to Word...');
         try {
           const blob = await convertPDFToWord(file);
-          downloadBlob(blob, 'converted.docx');
+          renderSuccessView(blob, 'converted.docx', showList);
         } catch (e) {
           showError(`Conversion failed: ${e}`);
         } finally {
@@ -608,7 +639,7 @@ export function initToolsUI(
         showLoading('Converting to PPT...');
         try {
           const blob = await convertPDFToPPT(file);
-          downloadBlob(blob, 'converted.pptx');
+          renderSuccessView(blob, 'converted.pptx', showList);
         } catch (e) {
           showError(`Conversion failed: ${e}`);
         } finally {
@@ -630,7 +661,7 @@ export function initToolsUI(
         showLoading('Converting to Images...');
         try {
           const blob = await convertPdfToImages(file, format, (p) => showLoading(`Converting: ${Math.round(p)}%`));
-          downloadBlob(blob, 'images.zip');
+          renderSuccessView(blob, 'images.zip', showList);
         } catch (e) {
           showError(`Conversion failed: ${e}`);
         } finally {
@@ -647,7 +678,7 @@ export function initToolsUI(
             showLoading('Converting Word to PDF...');
             try {
                 const blob = await convertWordToPDF(file);
-                downloadBlob(blob, file.name.replace(/\.docx$/i, '.pdf'));
+                renderSuccessView(blob, file.name.replace(/\.docx$/i, '.pdf'), showList);
             } catch (e) {
                 showError(`Conversion failed: ${e}`);
             } finally {
@@ -664,7 +695,7 @@ export function initToolsUI(
             showLoading('Converting Excel to PDF...');
             try {
                 const blob = await convertExcelToPDF(file);
-                downloadBlob(blob, file.name.replace(/\.xlsx$/i, '.pdf'));
+                renderSuccessView(blob, file.name.replace(/\.xlsx$/i, '.pdf'), showList);
             } catch (e) {
                 showError(`Conversion failed: ${e}`);
             } finally {
@@ -681,7 +712,7 @@ export function initToolsUI(
             showLoading('Converting PPT to PDF...');
             try {
                 const blob = await convertPPTToPDF(file);
-                downloadBlob(blob, file.name.replace(/\.pptx$/i, '.pdf'));
+                renderSuccessView(blob, file.name.replace(/\.pptx$/i, '.pdf'), showList);
             } catch (e) {
                 showError(`Conversion failed: ${e}`);
             } finally {
@@ -705,7 +736,7 @@ export function initToolsUI(
               renderToolView(tool);
           } else if (tool.action) {
               // Close if simple action
-              toolsModal.style.display = 'none';
+              // toolsModal.style.display = 'none'; // Don't close anymore, render success
               tool.action();
           }
         };
