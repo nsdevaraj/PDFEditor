@@ -17,6 +17,7 @@ import * as pdfjsLib from "pdfjs-dist";
 import { TextLayer } from "pdfjs-dist";
 import "./global.css";
 import "./mcp-app.css";
+import { initToolsUI } from "./tools-ui";
 
 const MAX_MODEL_CONTEXT_LENGTH = 15000;
 const CHUNK_SIZE = 500 * 1024; // 500KB chunks
@@ -141,6 +142,13 @@ function showViewer() {
   loadingEl.style.display = "none";
   errorEl.style.display = "none";
   viewerEl.style.display = "flex";
+}
+
+function hideLoading() {
+    loadingEl.style.display = "none";
+    if (pdfDocument) {
+        viewerEl.style.display = "flex";
+    }
 }
 
 function updateControls() {
@@ -795,6 +803,14 @@ function handleHostContextChanged(ctx: McpUiHostContext) {
 }
 
 app.onhostcontextchanged = handleHostContextChanged;
+
+// Initialize Tools UI
+initToolsUI(
+    () => pdfBytes,
+    showLoading,
+    hideLoading,
+    showError
+);
 
 // Connect to host
 app.connect().then(() => {
