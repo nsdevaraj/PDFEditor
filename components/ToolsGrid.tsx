@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, Suspense } from 'react';
 import { PDFDocument } from 'pdf-lib';
 import { encryptPDF } from '@pdfsmaller/pdf-encrypt-lite';
 import { validatePDFCompliance } from '../services/geminiService';
@@ -42,15 +42,23 @@ import {
   convertHTMLToPDF
 } from '../services/conversionService';
 import { UploadedFile } from '../types';
-import { SplitPDF } from './SplitPDF';
-import { ScanPDF } from './ScanPDF';
-import { RotatePDF } from './RotatePDF';
-import { OrganizePDF } from './OrganizePDF';
-import { PageNumbersPDF } from './PageNumbersPDF';
-import { CropPDF } from './CropPDF';
-import { ComparePDF } from './ComparePDF';
 import { convertPdfToImages } from '../utils/pdfConverter';
 import { performOCR } from '../services/ocrService';
+
+// Lazy load heavy components to reduce initial bundle size
+const SplitPDF = React.lazy(() => import('./SplitPDF').then(module => ({ default: module.SplitPDF })));
+const ScanPDF = React.lazy(() => import('./ScanPDF').then(module => ({ default: module.ScanPDF })));
+const RotatePDF = React.lazy(() => import('./RotatePDF').then(module => ({ default: module.RotatePDF })));
+const OrganizePDF = React.lazy(() => import('./OrganizePDF').then(module => ({ default: module.OrganizePDF })));
+const PageNumbersPDF = React.lazy(() => import('./PageNumbersPDF').then(module => ({ default: module.PageNumbersPDF })));
+const CropPDF = React.lazy(() => import('./CropPDF').then(module => ({ default: module.CropPDF })));
+const ComparePDF = React.lazy(() => import('./ComparePDF').then(module => ({ default: module.ComparePDF })));
+
+const FallbackLoader = () => (
+  <div className="flex-1 flex items-center justify-center h-full">
+    <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+  </div>
+);
 
 export const ToolsGrid: React.FC = () => {
   const [activeTool, setActiveTool] = useState<any>(null);
@@ -515,28 +523,60 @@ export const ToolsGrid: React.FC = () => {
   };
 
   if (activeTool?.title === "Split PDF" && currentFile) {
-    return <SplitPDF file={currentFile} onClose={handleClose} />;
+    return (
+        <Suspense fallback={<FallbackLoader />}>
+            <SplitPDF file={currentFile} onClose={handleClose} />
+        </Suspense>
+    );
   }
   if (activeTool?.title === "Extract PDF Pages" && currentFile) {
-    return <SplitPDF file={currentFile} onClose={handleClose} title="Extract Pages" actionLabel="Extract Pages" />;
+    return (
+        <Suspense fallback={<FallbackLoader />}>
+            <SplitPDF file={currentFile} onClose={handleClose} title="Extract Pages" actionLabel="Extract Pages" />
+        </Suspense>
+    );
   }
   if (activeTool?.title === "Scan to PDF") {
-    return <ScanPDF onClose={handleClose} />;
+    return (
+        <Suspense fallback={<FallbackLoader />}>
+            <ScanPDF onClose={handleClose} />
+        </Suspense>
+    );
   }
   if (activeTool?.title === "Rotate PDF" && currentFile) {
-    return <RotatePDF file={currentFile} onClose={handleClose} />;
+    return (
+        <Suspense fallback={<FallbackLoader />}>
+            <RotatePDF file={currentFile} onClose={handleClose} />
+        </Suspense>
+    );
   }
   if (activeTool?.title === "Organize PDF" && currentFile) {
-    return <OrganizePDF file={currentFile} onClose={handleClose} />;
+    return (
+        <Suspense fallback={<FallbackLoader />}>
+            <OrganizePDF file={currentFile} onClose={handleClose} />
+        </Suspense>
+    );
   }
   if (activeTool?.title === "Page Numbers" && currentFile) {
-    return <PageNumbersPDF file={currentFile} onClose={handleClose} />;
+    return (
+        <Suspense fallback={<FallbackLoader />}>
+            <PageNumbersPDF file={currentFile} onClose={handleClose} />
+        </Suspense>
+    );
   }
   if (activeTool?.title === "Crop PDF" && currentFile) {
-    return <CropPDF file={currentFile} onClose={handleClose} />;
+    return (
+        <Suspense fallback={<FallbackLoader />}>
+            <CropPDF file={currentFile} onClose={handleClose} />
+        </Suspense>
+    );
   }
   if (activeTool?.title === "Compare PDF" && currentFile) {
-    return <ComparePDF file={currentFile} onClose={handleClose} />;
+    return (
+        <Suspense fallback={<FallbackLoader />}>
+            <ComparePDF file={currentFile} onClose={handleClose} />
+        </Suspense>
+    );
   }
 
   return (
