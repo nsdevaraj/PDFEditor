@@ -73,7 +73,7 @@ function getCurrentPdfFile(pdfBytes: Uint8Array | null, filename: string = 'docu
 }
 
 export function initToolsUI(
-  getPdfBytes: () => Uint8Array | null,
+  getPdfBytes: () => Promise<Uint8Array | null>,
   showLoading: (text: string) => void,
   hideLoading: () => void,
   showError: (msg: string) => void
@@ -126,7 +126,8 @@ export function initToolsUI(
         name: 'Split PDF',
         description: 'Split by page ranges',
         action: async () => {
-            const file = getCurrentPdfFile(getPdfBytes());
+            const bytes = await getPdfBytes();
+            const file = getCurrentPdfFile(bytes);
             if (!file) return showError('No PDF loaded');
             const ranges = window.prompt("Enter page ranges to split (e.g. '1-3, 5, 7-9'):");
             if (!ranges) return;
@@ -145,7 +146,8 @@ export function initToolsUI(
       name: 'Compress PDF',
       description: 'Reduce PDF file size',
       action: async () => {
-        const file = getCurrentPdfFile(getPdfBytes());
+        const bytes = await getPdfBytes();
+        const file = getCurrentPdfFile(bytes);
         if (!file) return showError('No PDF loaded');
         showLoading('Compressing PDF...');
         try {
@@ -162,7 +164,8 @@ export function initToolsUI(
         name: 'Protect PDF',
         description: 'Add password protection',
         action: async () => {
-            const file = getCurrentPdfFile(getPdfBytes());
+            const bytes = await getPdfBytes();
+            const file = getCurrentPdfFile(bytes);
             if (!file) return showError('No PDF loaded');
             const password = window.prompt("Enter password to protect PDF:");
             if (!password) return;
@@ -202,7 +205,8 @@ export function initToolsUI(
       name: 'OCR PDF',
       description: 'Recognize text in scanned PDF',
       action: async () => {
-        const file = getCurrentPdfFile(getPdfBytes());
+        const bytes = await getPdfBytes();
+        const file = getCurrentPdfFile(bytes);
         if (!file) return showError('No PDF loaded');
         showLoading('Initializing OCR...');
         try {
@@ -219,7 +223,8 @@ export function initToolsUI(
         name: 'Validate PDF/A',
         description: 'Check for PDF/A compliance',
         action: async () => {
-            const file = getCurrentPdfFile(getPdfBytes());
+            const bytes = await getPdfBytes();
+            const file = getCurrentPdfFile(bytes);
             if (!file) return showError('No PDF loaded');
             showLoading('Validating...');
             try {
@@ -236,7 +241,8 @@ export function initToolsUI(
         name: 'Extract Pages',
         description: 'Extract specific pages',
         action: async () => {
-            const file = getCurrentPdfFile(getPdfBytes());
+            const bytes = await getPdfBytes();
+            const file = getCurrentPdfFile(bytes);
             if (!file) return showError('No PDF loaded');
             const ranges = window.prompt("Enter page numbers to extract (e.g. '1, 3, 5-7'):");
             if (!ranges) return;
@@ -272,7 +278,8 @@ export function initToolsUI(
         name: 'Rotate PDF',
         description: 'Rotate pages',
         action: async () => {
-            const file = getCurrentPdfFile(getPdfBytes());
+            const bytes = await getPdfBytes();
+            const file = getCurrentPdfFile(bytes);
             if (!file) return showError('No PDF loaded');
             const angleStr = window.prompt("Enter rotation angle (90, 180, 270):", "90");
             if (!angleStr) return;
@@ -294,7 +301,8 @@ export function initToolsUI(
         name: 'Organize PDF',
         description: 'Reorder pages',
         action: async () => {
-            const file = getCurrentPdfFile(getPdfBytes());
+            const bytes = await getPdfBytes();
+            const file = getCurrentPdfFile(bytes);
             if (!file) return showError('No PDF loaded');
             const orderStr = window.prompt("Enter new page order (comma separated, e.g. '3, 1, 2'):");
             if (!orderStr) return;
@@ -315,7 +323,8 @@ export function initToolsUI(
         name: 'Page Numbers',
         description: 'Add page numbers',
         action: async () => {
-            const file = getCurrentPdfFile(getPdfBytes());
+            const bytes = await getPdfBytes();
+            const file = getCurrentPdfFile(bytes);
             if (!file) return showError('No PDF loaded');
             showLoading('Adding page numbers...');
             try {
@@ -332,7 +341,8 @@ export function initToolsUI(
         name: 'Crop PDF',
         description: 'Crop pages (auto-margin)',
         action: async () => {
-            const file = getCurrentPdfFile(getPdfBytes());
+            const bytes = await getPdfBytes();
+            const file = getCurrentPdfFile(bytes);
             if (!file) return showError('No PDF loaded');
             if (!confirm("This will crop 50 units from all sides as a demo. Continue?")) return;
 
@@ -368,7 +378,8 @@ export function initToolsUI(
       name: 'Flatten PDF',
       description: 'Flatten layers and forms',
       action: async () => {
-        const file = getCurrentPdfFile(getPdfBytes());
+        const bytes = await getPdfBytes();
+        const file = getCurrentPdfFile(bytes);
         if (!file) return showError('No PDF loaded');
         showLoading('Flattening PDF...');
         try {
@@ -385,7 +396,8 @@ export function initToolsUI(
       name: 'Convert to Excel',
       description: 'Extract tables to Excel',
       action: async () => {
-        const file = getCurrentPdfFile(getPdfBytes());
+        const bytes = await getPdfBytes();
+        const file = getCurrentPdfFile(bytes);
         if (!file) return showError('No PDF loaded');
         showLoading('Converting to Excel...');
         try {
@@ -402,7 +414,8 @@ export function initToolsUI(
       name: 'Convert to Word',
       description: 'Convert PDF to Word DOCX',
       action: async () => {
-        const file = getCurrentPdfFile(getPdfBytes());
+        const bytes = await getPdfBytes();
+        const file = getCurrentPdfFile(bytes);
         if (!file) return showError('No PDF loaded');
         showLoading('Converting to Word...');
         try {
@@ -419,7 +432,8 @@ export function initToolsUI(
       name: 'Convert to PPT',
       description: 'Convert PDF to PowerPoint',
       action: async () => {
-        const file = getCurrentPdfFile(getPdfBytes());
+        const bytes = await getPdfBytes();
+        const file = getCurrentPdfFile(bytes);
         if (!file) return showError('No PDF loaded');
         showLoading('Converting to PPT...');
         try {
@@ -436,7 +450,8 @@ export function initToolsUI(
       name: 'PDF to Images',
       description: 'Save pages as images (ZIP)',
       action: async () => {
-        const file = getCurrentPdfFile(getPdfBytes());
+        const bytes = await getPdfBytes();
+        const file = getCurrentPdfFile(bytes);
         if (!file) return showError('No PDF loaded');
 
         // Simple prompt for format

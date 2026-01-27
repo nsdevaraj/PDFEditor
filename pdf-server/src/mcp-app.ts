@@ -806,7 +806,18 @@ app.onhostcontextchanged = handleHostContextChanged;
 
 // Initialize Tools UI
 initToolsUI(
-    () => pdfBytes,
+    async () => {
+        if (pdfBytes && pdfBytes.length > 0) return pdfBytes;
+        if (pdfDocument) {
+            try {
+                // Fallback: try to get data from document proxy
+                return await pdfDocument.getData();
+            } catch (e) {
+                console.error("Failed to retrieve PDF data from document", e);
+            }
+        }
+        return null;
+    },
     showLoading,
     hideLoading,
     showError
