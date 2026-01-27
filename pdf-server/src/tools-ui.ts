@@ -72,6 +72,13 @@ function getCurrentPdfFile(pdfBytes: Uint8Array | null, filename: string = 'docu
   return new File([pdfBytes as any], filename, { type: 'application/pdf' });
 }
 
+interface ToolDef {
+    name: string;
+    description: string;
+    action?: () => Promise<void>;
+    renderUI?: (container: HTMLElement, back: () => void) => void;
+}
+
 export function initToolsUI(
   getPdfBytes: () => Promise<Uint8Array | null>,
   showLoading: (text: string) => void,
@@ -82,16 +89,25 @@ export function initToolsUI(
   const toolsModal = document.getElementById('tools-modal');
   const closeToolsBtn = document.getElementById('close-tools-btn');
   const toolsList = document.getElementById('tools-list');
+  const modalHeader = toolsModal?.querySelector('.modal-header h3');
 
   if (!toolsBtn || !toolsModal || !closeToolsBtn || !toolsList) {
     console.error('Tools UI elements not found');
     return;
   }
 
-  toolsBtn.style.display = 'flex'; // Show the button
+  // Helper to reset to list view
+  const showList = () => {
+      toolsList.innerHTML = '';
+      if (modalHeader) modalHeader.textContent = 'PDF Tools';
+      renderToolsList();
+  };
+
+  toolsBtn.style.display = 'flex';
 
   toolsBtn.onclick = () => {
     toolsModal.style.display = 'flex';
+    showList();
   };
 
   closeToolsBtn.onclick = () => {
@@ -104,42 +120,302 @@ export function initToolsUI(
     }
   };
 
-  const tools = [
+  const renderToolView = (tool: ToolDef) => {
+      toolsList.innerHTML = ''; // Clear list
+      if (modalHeader) modalHeader.textContent = tool.name;
+
+      const container = document.createElement('div');
+      container.className = 'tool-view-container';
+      container.style.padding = '1rem';
+
+      const backBtn = document.createElement('button');
+      backBtn.textContent = '← Back';
+      backBtn.className = 'nav-btn'; // Reuse style or add new
+      backBtn.style.marginBottom = '1rem';
+      backBtn.onclick = showList;
+
+      const content = document.createElement('div');
+      content.className = 'tool-content';
+
+      container.appendChild(backBtn);
+      container.appendChild(content);
+      toolsList.appendChild(container);
+
+      if (tool.renderUI) {
+          tool.renderUI(content, showList);
+      }
+  };
+
+  const tools: ToolDef[] = [
     {
         name: 'Merge PDF',
         description: 'Combine multiple PDFs',
-        action: async () => {
-            const files = await selectFile('.pdf', true) as File[];
-            if (!files || files.length < 2) return showError("Select at least 2 PDF files");
-            showLoading('Merging PDFs...');
-            try {
-                const blob = await mergePDFs(files);
-                downloadBlob(blob, 'merged.pdf');
-            } catch (e) {
-                showError(`Merge failed: ${e}`);
-            } finally {
-                hideLoading();
-            }
+        renderUI: (container, back) => {
+            container.innerHTML = `
+                <p>Select PDF files to merge (in order):</p>
+                <div id="file-list" style="margin: 10px 0; border: 1px solid #ddd; padding: 10px; min-height: 50px;"></div>
+                <button id="add-files-btn" class="tool-action-btn">Add Files</button>
+                <button id="merge-btn" class="tool-action-btn primary" style="margin-left: 10px;">Merge</button>
+            `;
+            const fileListEl = container.querySelector('#file-list') as HTMLElement;
+            const addBtn = container.querySelector('#add-files-btn') as HTMLButtonElement;
+            const mergeBtn = container.querySelector('#merge-btn') as HTMLButtonElement;
+
+            let selectedFiles: File[] = [];
+
+            const renderFiles = () => {
+                fileListEl.innerHTML = selectedFiles.map((f, i) => `
+                    <div style="display: flex; justify-content: space-between; padding: 4px; background: #f5f5f5; margin-bottom: 4px;">
+                        <span>${i+1}. ${f.name}</span>
+                        <span style="cursor: pointer; color: red;" data-idx="${i}">×</span>
+                    </div>
+                `).join('');
+
+                fileListEl.querySelectorAll('span[data-idx]').forEach(el => {
+                    (el as HTMLElement).onclick = (e) => {
+                        const idx = parseInt((e.target as HTMLElement).dataset.idx || '0');
+                        selectedFiles.splice(idx, 1);
+                        renderFiles();
+                    };
+                });
+            };
+
+            addBtn.onclick = async () => {
+                const files = await selectFile('.pdf', true) as File[] | null;
+                if (files) {
+                    selectedFiles = [...selectedFiles, ...files];
+                    renderFiles();
+                }
+            };
+
+            mergeBtn.onclick = async () => {
+                if (selectedFiles.length < 2) return alert("Please select at least 2 files.");
+                showLoading('Merging PDFs...');
+                try {
+                    const blob = await mergePDFs(selectedFiles);
+                    downloadBlob(blob, 'merged.pdf');
+                    back();
+                } catch (e) {
+                    showError(`Merge failed: ${e}`);
+                } finally {
+                    hideLoading();
+                }
+            };
         }
     },
     {
         name: 'Split PDF',
         description: 'Split by page ranges',
-        action: async () => {
-            const bytes = await getPdfBytes();
-            const file = getCurrentPdfFile(bytes);
-            if (!file) return showError('No PDF loaded');
-            const ranges = window.prompt("Enter page ranges to split (e.g. '1-3, 5, 7-9'):");
-            if (!ranges) return;
-            showLoading('Splitting PDF...');
-            try {
-                const blob = await splitPDF(file, ranges);
-                downloadBlob(blob, 'split.pdf');
-            } catch (e) {
-                showError(`Split failed: ${e}`);
-            } finally {
-                hideLoading();
-            }
+        renderUI: (container, back) => {
+            container.innerHTML = `
+                <p>Enter page ranges to extract (e.g. '1-3, 5, 7-9'):</p>
+                <input type="text" id="split-ranges" class="tool-input" placeholder="1-5" style="width: 100%; padding: 8px; margin: 10px 0;">
+                <button id="split-btn" class="tool-action-btn primary">Split PDF</button>
+            `;
+            const input = container.querySelector('#split-ranges') as HTMLInputElement;
+            const btn = container.querySelector('#split-btn') as HTMLButtonElement;
+
+            btn.onclick = async () => {
+                const ranges = input.value;
+                if (!ranges) return alert("Please enter a range.");
+
+                const bytes = await getPdfBytes();
+                const file = getCurrentPdfFile(bytes);
+                if (!file) return showError('No PDF loaded');
+
+                showLoading('Splitting PDF...');
+                try {
+                    const blob = await splitPDF(file, ranges);
+                    downloadBlob(blob, 'split.pdf');
+                    back();
+                } catch (e) {
+                    showError(`Split failed: ${e}`);
+                } finally {
+                    hideLoading();
+                }
+            };
+        }
+    },
+    {
+        name: 'Extract Pages',
+        description: 'Extract specific pages',
+        renderUI: (container, back) => {
+            container.innerHTML = `
+                <p>Enter page numbers/ranges to extract:</p>
+                <input type="text" id="extract-ranges" class="tool-input" placeholder="1, 3, 5-7" style="width: 100%; padding: 8px; margin: 10px 0;">
+                <button id="extract-btn" class="tool-action-btn primary">Extract</button>
+            `;
+            const input = container.querySelector('#extract-ranges') as HTMLInputElement;
+            const btn = container.querySelector('#extract-btn') as HTMLButtonElement;
+
+            btn.onclick = async () => {
+                const ranges = input.value;
+                if (!ranges) return alert("Please enter ranges.");
+
+                const bytes = await getPdfBytes();
+                const file = getCurrentPdfFile(bytes);
+                if (!file) return showError('No PDF loaded');
+
+                showLoading('Extracting pages...');
+                try {
+                    const blob = await extractPages(file, ranges);
+                    downloadBlob(blob, 'extracted.pdf');
+                    back();
+                } catch (e) {
+                    showError(`Extraction failed: ${e}`);
+                } finally {
+                    hideLoading();
+                }
+            };
+        }
+    },
+    {
+        name: 'Organize PDF',
+        description: 'Reorder pages',
+        renderUI: (container, back) => {
+            container.innerHTML = `
+                <p>Enter new page order (comma separated):</p>
+                <input type="text" id="organize-order" class="tool-input" placeholder="3, 1, 2" style="width: 100%; padding: 8px; margin: 10px 0;">
+                <button id="organize-btn" class="tool-action-btn primary">Reorder</button>
+            `;
+            const input = container.querySelector('#organize-order') as HTMLInputElement;
+            const btn = container.querySelector('#organize-btn') as HTMLButtonElement;
+
+            btn.onclick = async () => {
+                const orderStr = input.value;
+                if (!orderStr) return alert("Please enter order.");
+                const order = orderStr.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+                if (order.length === 0) return alert("Invalid order.");
+
+                const bytes = await getPdfBytes();
+                const file = getCurrentPdfFile(bytes);
+                if (!file) return showError('No PDF loaded');
+
+                showLoading('Organizing PDF...');
+                try {
+                    const blob = await organizePDF(file, order);
+                    downloadBlob(blob, 'organized.pdf');
+                    back();
+                } catch (e) {
+                    showError(`Organize failed: ${e}`);
+                } finally {
+                    hideLoading();
+                }
+            };
+        }
+    },
+    {
+        name: 'Rotate PDF',
+        description: 'Rotate pages',
+        renderUI: (container, back) => {
+            container.innerHTML = `
+                <p>Select rotation angle:</p>
+                <div style="display: flex; gap: 10px; margin: 10px 0;">
+                    <button class="rotate-opt tool-action-btn" data-angle="90">90° CW</button>
+                    <button class="rotate-opt tool-action-btn" data-angle="180">180°</button>
+                    <button class="rotate-opt tool-action-btn" data-angle="270">90° CCW</button>
+                </div>
+            `;
+
+            container.querySelectorAll('.rotate-opt').forEach(btn => {
+                (btn as HTMLElement).onclick = async () => {
+                    const angle = parseInt((btn as HTMLElement).dataset.angle || '0');
+
+                    const bytes = await getPdfBytes();
+                    const file = getCurrentPdfFile(bytes);
+                    if (!file) return showError('No PDF loaded');
+
+                    showLoading('Rotating PDF...');
+                    try {
+                        const blob = await rotatePDF(file, angle);
+                        downloadBlob(blob, 'rotated.pdf');
+                        back();
+                    } catch (e) {
+                        showError(`Rotation failed: ${e}`);
+                    } finally {
+                        hideLoading();
+                    }
+                };
+            });
+        }
+    },
+    {
+        name: 'Protect PDF',
+        description: 'Add password protection',
+        renderUI: (container, back) => {
+            container.innerHTML = `
+                <p>Enter password to protect PDF:</p>
+                <input type="password" id="protect-pw" class="tool-input" style="width: 100%; padding: 8px; margin: 10px 0;">
+                <button id="protect-btn" class="tool-action-btn primary">Protect</button>
+            `;
+            const input = container.querySelector('#protect-pw') as HTMLInputElement;
+            const btn = container.querySelector('#protect-btn') as HTMLButtonElement;
+
+            btn.onclick = async () => {
+                const password = input.value;
+                if (!password) return alert("Please enter a password.");
+
+                const bytes = await getPdfBytes();
+                const file = getCurrentPdfFile(bytes);
+                if (!file) return showError('No PDF loaded');
+
+                showLoading('Protecting PDF...');
+                try {
+                    const blob = await protectPDF(file, password);
+                    downloadBlob(blob, 'protected.pdf');
+                    back();
+                } catch (e) {
+                    showError(`Protection failed: ${e}`);
+                } finally {
+                    hideLoading();
+                }
+            };
+        }
+    },
+    {
+        name: 'Unlock PDF',
+        description: 'Remove password',
+        renderUI: (container, back) => {
+            container.innerHTML = `
+                <p>To unlock a PDF, select it from your device:</p>
+                <button id="select-unlock-btn" class="tool-action-btn">Select File</button>
+                <div id="unlock-step-2" style="display: none; margin-top: 10px;">
+                    <p>Enter password:</p>
+                    <input type="password" id="unlock-pw" class="tool-input" style="width: 100%; padding: 8px; margin: 10px 0;">
+                    <button id="unlock-btn" class="tool-action-btn primary">Unlock</button>
+                </div>
+            `;
+            const selectBtn = container.querySelector('#select-unlock-btn') as HTMLButtonElement;
+            const step2 = container.querySelector('#unlock-step-2') as HTMLElement;
+            const input = container.querySelector('#unlock-pw') as HTMLInputElement;
+            const unlockBtn = container.querySelector('#unlock-btn') as HTMLButtonElement;
+
+            let selectedFile: File | null = null;
+
+            selectBtn.onclick = async () => {
+                selectedFile = await selectFile('.pdf') as File;
+                if (selectedFile) {
+                    selectBtn.textContent = `Selected: ${selectedFile.name}`;
+                    step2.style.display = 'block';
+                }
+            };
+
+            unlockBtn.onclick = async () => {
+                if (!selectedFile) return;
+                const password = input.value;
+                if (!password) return alert("Please enter password.");
+
+                showLoading('Unlocking PDF...');
+                try {
+                    const blob = await unlockPDF(selectedFile, password);
+                    downloadBlob(blob, 'unlocked.pdf');
+                    back();
+                } catch (e) {
+                    showError(`Unlock failed: ${e}`);
+                } finally {
+                    hideLoading();
+                }
+            };
         }
     },
     {
@@ -159,47 +435,6 @@ export function initToolsUI(
           hideLoading();
         }
       }
-    },
-    {
-        name: 'Protect PDF',
-        description: 'Add password protection',
-        action: async () => {
-            const bytes = await getPdfBytes();
-            const file = getCurrentPdfFile(bytes);
-            if (!file) return showError('No PDF loaded');
-            const password = window.prompt("Enter password to protect PDF:");
-            if (!password) return;
-            showLoading('Protecting PDF...');
-            try {
-                const blob = await protectPDF(file, password);
-                downloadBlob(blob, 'protected.pdf');
-            } catch (e) {
-                showError(`Protection failed: ${e}`);
-            } finally {
-                hideLoading();
-            }
-        }
-    },
-    {
-        name: 'Unlock PDF',
-        description: 'Remove password',
-        action: async () => {
-            // Note: Current file in viewer is already decrypted by PDF.js if it was password protected.
-            // But if we want to process a fresh file:
-            const file = await selectFile('.pdf') as File;
-            if (!file) return;
-            const password = window.prompt("Enter password to unlock PDF:");
-            if (!password) return;
-            showLoading('Unlocking PDF...');
-            try {
-                const blob = await unlockPDF(file, password);
-                downloadBlob(blob, 'unlocked.pdf');
-            } catch (e) {
-                showError(`Unlock failed: ${e}`);
-            } finally {
-                hideLoading();
-            }
-        }
     },
     {
       name: 'OCR PDF',
@@ -238,26 +473,6 @@ export function initToolsUI(
         }
     },
     {
-        name: 'Extract Pages',
-        description: 'Extract specific pages',
-        action: async () => {
-            const bytes = await getPdfBytes();
-            const file = getCurrentPdfFile(bytes);
-            if (!file) return showError('No PDF loaded');
-            const ranges = window.prompt("Enter page numbers to extract (e.g. '1, 3, 5-7'):");
-            if (!ranges) return;
-            showLoading('Extracting pages...');
-            try {
-                const blob = await extractPages(file, ranges);
-                downloadBlob(blob, 'extracted.pdf');
-            } catch (e) {
-                showError(`Extraction failed: ${e}`);
-            } finally {
-                hideLoading();
-            }
-        }
-    },
-    {
         name: 'JPG to PDF',
         description: 'Convert JPG/PNG to PDF',
         action: async () => {
@@ -272,51 +487,6 @@ export function initToolsUI(
              } finally {
                  hideLoading();
              }
-        }
-    },
-    {
-        name: 'Rotate PDF',
-        description: 'Rotate pages',
-        action: async () => {
-            const bytes = await getPdfBytes();
-            const file = getCurrentPdfFile(bytes);
-            if (!file) return showError('No PDF loaded');
-            const angleStr = window.prompt("Enter rotation angle (90, 180, 270):", "90");
-            if (!angleStr) return;
-            const angle = parseInt(angleStr);
-            if (isNaN(angle)) return showError("Invalid angle");
-
-            showLoading('Rotating PDF...');
-            try {
-                const blob = await rotatePDF(file, angle);
-                downloadBlob(blob, 'rotated.pdf');
-            } catch (e) {
-                showError(`Rotation failed: ${e}`);
-            } finally {
-                hideLoading();
-            }
-        }
-    },
-    {
-        name: 'Organize PDF',
-        description: 'Reorder pages',
-        action: async () => {
-            const bytes = await getPdfBytes();
-            const file = getCurrentPdfFile(bytes);
-            if (!file) return showError('No PDF loaded');
-            const orderStr = window.prompt("Enter new page order (comma separated, e.g. '3, 1, 2'):");
-            if (!orderStr) return;
-            const order = orderStr.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
-
-            showLoading('Organizing PDF...');
-            try {
-                const blob = await organizePDF(file, order);
-                downloadBlob(blob, 'organized.pdf');
-            } catch (e) {
-                showError(`Organize failed: ${e}`);
-            } finally {
-                hideLoading();
-            }
         }
     },
     {
@@ -521,19 +691,28 @@ export function initToolsUI(
     }
   ];
 
-  // Render tools
-  toolsList.innerHTML = '';
-  tools.forEach(tool => {
-    const btn = document.createElement('div');
-    btn.className = 'tool-card';
-    btn.innerHTML = `
-      <div class="tool-name">${tool.name}</div>
-      <div class="tool-desc">${tool.description}</div>
-    `;
-    btn.onclick = () => {
-      toolsModal.style.display = 'none';
-      tool.action();
-    };
-    toolsList.appendChild(btn);
-  });
+  const renderToolsList = () => {
+      toolsList.innerHTML = '';
+      tools.forEach(tool => {
+        const btn = document.createElement('div');
+        btn.className = 'tool-card';
+        btn.innerHTML = `
+          <div class="tool-name">${tool.name}</div>
+          <div class="tool-desc">${tool.description}</div>
+        `;
+        btn.onclick = () => {
+          if (tool.renderUI) {
+              renderToolView(tool);
+          } else if (tool.action) {
+              // Close if simple action
+              toolsModal.style.display = 'none';
+              tool.action();
+          }
+        };
+        toolsList.appendChild(btn);
+      });
+  };
+
+  // Initial render
+  renderToolsList();
 }
