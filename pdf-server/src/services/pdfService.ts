@@ -1,5 +1,6 @@
 import { jsPDF } from 'jspdf';
 import * as pdfjsLib from 'pdfjs-dist';
+import { PDFDocument, degrees } from 'pdf-lib';
 
 // Worker configuration is handled globally in mcp-app.ts
 
@@ -257,4 +258,197 @@ export const flattenPDF = async (
         reject(error);
     }
   });
+};
+
+// --- Structure Manipulation ---
+
+export const mergePDFs = async (files: File[]): Promise<Blob> => {
+    const mergedPdf = await PDFDocument.create();
+
+    for (const file of files) {
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await PDFDocument.load(arrayBuffer);
+        const copiedPages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
+        copiedPages.forEach((page) => mergedPdf.addPage(page));
+    }
+
+    const savedBytes = await mergedPdf.save();
+    return new Blob([savedBytes as any], { type: 'application/pdf' });
+};
+
+export const splitPDF = async (file: File, pageRanges: string): Promise<Blob> => {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdfDoc = await PDFDocument.load(arrayBuffer);
+    const newDoc = await PDFDocument.create();
+    const totalPages = pdfDoc.getPageCount();
+
+    const selectedIndices = new Set<number>();
+    const parts = pageRanges.split(',');
+
+    parts.forEach(part => {
+        const trimmed = part.trim();
+        if (trimmed.includes('-')) {
+            const [start, end] = trimmed.split('-').map(Number);
+            if (!isNaN(start) && !isNaN(end)) {
+                for (let i = start; i <= end; i++) {
+                    if (i >= 1 && i <= totalPages) {
+                        selectedIndices.add(i - 1);
+                    }
+                }
+            }
+        } else {
+            const page = Number(trimmed);
+            if (!isNaN(page) && page >= 1 && page <= totalPages) {
+                selectedIndices.add(page - 1);
+            }
+        }
+    });
+
+    const indicesToCopy = Array.from(selectedIndices).sort((a, b) => a - b);
+    if (indicesToCopy.length === 0) throw new Error("No valid pages selected");
+
+    const copiedPages = await newDoc.copyPages(pdfDoc, indicesToCopy);
+    copiedPages.forEach(page => newDoc.addPage(page));
+
+    const savedBytes = await newDoc.save();
+    return new Blob([savedBytes as any], { type: 'application/pdf' });
+};
+
+export const extractPages = async (file: File, pageRanges: string): Promise<Blob> => {
+    return splitPDF(file, pageRanges); // Same logic as split for extraction
+};
+
+export const organizePDF = async (file: File, pageOrder: number[]): Promise<Blob> => {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdfDoc = await PDFDocument.load(arrayBuffer);
+    const newDoc = await PDFDocument.create();
+
+    // pageOrder is 1-based
+    const indicesToCopy = pageOrder.map(p => p - 1);
+    const copiedPages = await newDoc.copyPages(pdfDoc, indicesToCopy);
+    copiedPages.forEach(page => newDoc.addPage(page));
+
+    const savedBytes = await newDoc.save();
+    return new Blob([savedBytes as any], { type: 'application/pdf' });
+};
+
+// --- Content Modification ---
+
+export const rotatePDF = async (file: File, rotation: number): Promise<Blob> => {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdfDoc = await PDFDocument.load(arrayBuffer);
+    const pages = pdfDoc.getPages();
+
+    pages.forEach(page => {
+        const currentRotation = page.getRotation().angle;
+        page.setRotation(degrees(currentRotation + rotation));
+    });
+
+    const savedBytes = await pdfDoc.save();
+    return new Blob([savedBytes as any], { type: 'application/pdf' });
+};
+
+export const addPageNumbers = async (file: File, position: 'bottom-center' | 'bottom-right' = 'bottom-center'): Promise<Blob> => {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdfDoc = await PDFDocument.load(arrayBuffer);
+    const pages = pdfDoc.getPages();
+    const totalPages = pages.length;
+
+    pages.forEach((page, idx) => {
+        const { width } = page.getSize();
+        const text = `${idx + 1} / ${totalPages}`;
+        const fontSize = 12;
+
+        let x = width / 2;
+        if (position === 'bottom-right') {
+            x = width - 50;
+        }
+
+        page.drawText(text, {
+            x,
+            y: 20,
+            size: fontSize,
+            // default font is usually Helvetica
+        });
+    });
+
+    const savedBytes = await pdfDoc.save();
+    return new Blob([savedBytes as any], { type: 'application/pdf' });
+};
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export const protectPDF = async (_file: File, _password: string): Promise<Blob> => {
+    // pdf-lib does not support encryption.
+    // We will raise an error for now as this feature requires a different library (like node-qpdf or similar, but those are node-only/C++ bindings).
+    // Or we could implement a basic encryption using a pure JS library if available, but for now we will disable it.
+    throw new Error("Password protection is not supported by the current PDF library version.");
+};
+
+export const unlockPDF = async (file: File, password: string): Promise<Blob> => {
+     // pdf-lib can load encrypted PDFs if password is provided (in newer versions, but maybe not 1.17.1 fully for all encryption types)
+     // The error log suggests encryption support is limited.
+     // However, we will try to load with password. If it fails, we report error.
+    const arrayBuffer = await file.arrayBuffer();
+    try {
+        // @ts-ignore
+        const pdfDoc = await PDFDocument.load(arrayBuffer, { password });
+        const savedBytes = await pdfDoc.save();
+        return new Blob([savedBytes as any], { type: 'application/pdf' });
+    } catch (e) {
+        throw new Error("Failed to unlock PDF. Feature might not be supported or password incorrect.");
+    }
+};
+
+export const repairPDF = async (file: File): Promise<Blob> => {
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    // pdf-lib automatically attempts to repair XRef tables when loading
+    const pdfDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
+
+    // Copy pages to a new document to ensure a clean structure
+    const newDoc = await PDFDocument.create();
+    const pages = await newDoc.copyPages(pdfDoc, pdfDoc.getPageIndices());
+
+    pages.forEach(page => newDoc.addPage(page));
+
+    const savedBytes = await newDoc.save();
+    return new Blob([savedBytes as any], { type: 'application/pdf' });
+  } catch (error) {
+    console.error("Repair failed:", error);
+    throw new Error("Failed to repair PDF. The file might be too corrupted.");
+  }
+};
+
+export const validatePDFA = async (file: File): Promise<boolean> => {
+    // True PDF/A validation is complex and requires specialized libraries (often native or Java based like VeraPDF).
+    // pdf.js and pdf-lib do not support full PDF/A validation.
+    // We can do a basic check for metadata claims, but it is not a guarantee.
+    // For now, we will return a mock result or a basic check of metadata.
+
+    const arrayBuffer = await file.arrayBuffer();
+    const str = new TextDecoder().decode(arrayBuffer.slice(0, 4096)); // Check header/metadata
+
+    // Naive check for PDF/A metadata
+    if (str.includes("pdfaid:part")) {
+        return true;
+    }
+
+    return false;
+};
+
+export const cropPDF = async (file: File): Promise<Blob> => {
+    // Crop to a fixed margin for demo purposes, as we don't have a UI for crop box selection here yet.
+    // In a real app, we'd pass { x, y, width, height }
+    const arrayBuffer = await file.arrayBuffer();
+    const pdfDoc = await PDFDocument.load(arrayBuffer);
+    const pages = pdfDoc.getPages();
+
+    pages.forEach(page => {
+        const { width, height } = page.getSize();
+        const margin = 50;
+        page.setCropBox(margin, margin, width - margin * 2, height - margin * 2);
+    });
+
+    const savedBytes = await pdfDoc.save();
+    return new Blob([savedBytes as any], { type: 'application/pdf' });
 };
