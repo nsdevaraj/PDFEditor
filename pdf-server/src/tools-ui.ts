@@ -67,7 +67,7 @@ function selectFile(accept: string, multiple: boolean = false): Promise<File | F
 
 // Helper to get current PDF as File
 function getCurrentPdfFile(pdfBytes: Uint8Array | null, filename: string = 'document.pdf'): File | null {
-  if (!pdfBytes) return null;
+  if (!pdfBytes || pdfBytes.length === 0) return null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return new File([pdfBytes as any], filename, { type: 'application/pdf' });
 }
