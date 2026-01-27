@@ -84,7 +84,8 @@ export function initToolsUI(
   getPdfBytes: () => Promise<Uint8Array | null>,
   showLoading: (text: string) => void,
   hideLoading: () => void,
-  showError: (msg: string) => void
+  showError: (msg: string) => void,
+  saveFile?: (filename: string, blob: Blob) => Promise<void>
 ) {
   const toolsBtn = document.getElementById('tools-btn');
   const toolsModal = document.getElementById('tools-modal');
@@ -139,15 +140,33 @@ export function initToolsUI(
         <h3 style="margin: 0 0 1rem 0; color: var(--text000);">Processing Complete</h3>
         <p style="color: var(--text100); margin-bottom: 2rem;">Your file has been processed successfully.</p>
         <button id="download-result-btn" class="tool-action-btn primary" style="margin-bottom: 1rem; width: 100%;">Download File</button>
+        ${saveFile ? `<button id="save-host-btn" class="tool-action-btn secondary" style="margin-bottom: 1rem; width: 100%;">Save to Host</button>` : ''}
         <button id="back-to-tools-btn" class="nav-btn">Back to Tools</button>
       `;
 
       const downloadBtn = container.querySelector('#download-result-btn') as HTMLButtonElement;
       const backBtn = container.querySelector('#back-to-tools-btn') as HTMLButtonElement;
+      const saveBtn = container.querySelector('#save-host-btn') as HTMLButtonElement;
 
       downloadBtn.onclick = () => {
           downloadBlob(blob, filename);
       };
+
+      if (saveBtn) {
+          saveBtn.onclick = async () => {
+              if (saveFile) {
+                  showLoading('Saving to host...');
+                  try {
+                      await saveFile(filename, blob);
+                      alert(`Saved ${filename} to host.`);
+                  } catch (e) {
+                      showError(`Save failed: ${e}`);
+                  } finally {
+                      hideLoading();
+                  }
+              }
+          };
+      }
 
       backBtn.onclick = back;
 

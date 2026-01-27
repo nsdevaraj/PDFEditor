@@ -305,6 +305,55 @@ export function createServer(): McpServer {
     .map((origin) => origin.replace(/^https?:\/\/(www\.)?/, ""))
     .join(", ");
 
+  // Tool: save_file (app-only) - Save file to server
+  registerAppTool(
+    server,
+    "save_file",
+    {
+      title: "Save File",
+      description: "Save a file to the server's working directory",
+      inputSchema: {
+        filename: z.string().describe("Filename"),
+        data: z.string().describe("Base64 encoded data"),
+      },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      outputSchema: z.object({
+        success: z.boolean(),
+        path: z.string(),
+      }).passthrough() as any,
+      _meta: { ui: { visibility: ["app"] } },
+    },
+    async ({ filename, data }): Promise<CallToolResult> => {
+      try {
+        const buffer = Buffer.from(data, "base64");
+        // Sanitize filename to prevent directory traversal
+        const safeFilename = path.basename(filename);
+        const filePath = path.join(process.cwd(), safeFilename);
+
+        await fs.promises.writeFile(filePath, buffer);
+        console.error(`[pdf-server] Saved file: ${filePath}`);
+
+        return {
+          content: [{ type: "text", text: `File saved to ${filePath}` }],
+          structuredContent: {
+            success: true,
+            path: filePath,
+          },
+        };
+      } catch (err) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Error saving file: ${err instanceof Error ? err.message : String(err)}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+
   // Tool: display_pdf - Show interactive viewer
   registerAppTool(
     server,
