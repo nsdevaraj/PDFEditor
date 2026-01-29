@@ -1,6 +1,5 @@
 import React, { useState, useRef, Suspense } from 'react';
-import { PDFDocument } from 'pdf-lib';
-import { encryptPDF } from '@pdfsmaller/pdf-encrypt-lite';
+import type { PDFDocument } from 'pdf-lib';
 import { validatePDFCompliance } from '../services/geminiService';
 import { 
   FileText, 
@@ -210,6 +209,7 @@ export const ToolsGrid: React.FC = () => {
             const buffer = await file.arrayBuffer();
             try {
                 // Attempt to load without password first (in case it's just owner password or no password)
+                const { PDFDocument } = await import('pdf-lib');
                 const pdfDoc = await PDFDocument.load(buffer);
                 // If loaded, save it (this removes encryption if it was just owner password)
                 const savedBytes = await pdfDoc.save();
@@ -371,6 +371,7 @@ export const ToolsGrid: React.FC = () => {
       const pdfBytes = new Uint8Array(arrayBuffer);
 
       // Use @pdfsmaller/pdf-encrypt-lite for encryption
+      const { encryptPDF } = await import('@pdfsmaller/pdf-encrypt-lite');
       const encryptedBytes = await encryptPDF(pdfBytes, password, password);
 
       const blob = new Blob([encryptedBytes], { type: 'application/pdf' });
@@ -410,6 +411,7 @@ export const ToolsGrid: React.FC = () => {
     setErrorMessage('');
 
     try {
+      const { PDFDocument } = await import('pdf-lib');
       const pdfDoc = await PDFDocument.load(fileBuffer, { password });
       const savedBytes = await pdfDoc.save();
       const blob = new Blob([savedBytes], { type: 'application/pdf' });

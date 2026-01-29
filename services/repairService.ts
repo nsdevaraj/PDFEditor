@@ -1,7 +1,8 @@
-import { PDFDocument } from 'pdf-lib';
+import type { PDFDocument } from 'pdf-lib';
 
 export const repairPDF = async (file: File): Promise<Blob> => {
   try {
+    const { PDFDocument } = await import('pdf-lib');
     const arrayBuffer = await file.arrayBuffer();
 
     // distinct loading options could be added here if needed
