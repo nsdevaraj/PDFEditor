@@ -1,8 +1,4 @@
-import { jsPDF } from 'jspdf';
-import * as pdfjsLib from 'pdfjs-dist';
-
-// Configure PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://esm.sh/pdfjs-dist@4.0.379/build/pdf.worker.min.mjs`;
+import type { jsPDF } from 'jspdf';
 
 const getConcurrencyLimit = () => {
   if (typeof navigator !== 'undefined' && navigator.hardwareConcurrency) {
@@ -18,6 +14,10 @@ export const compressPDF = async (
 ): Promise<Blob> => {
   return new Promise(async (resolve, reject) => {
     try {
+        const { jsPDF } = await import('jspdf');
+        const pdfjsLib = await import('pdfjs-dist');
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://esm.sh/pdfjs-dist@4.0.379/build/pdf.worker.min.mjs`;
+
         const arrayBuffer = await file.arrayBuffer();
         // pdfjs-dist expects Uint8Array or similar for data
         const data = new Uint8Array(arrayBuffer);
@@ -142,6 +142,10 @@ export const flattenPDF = async (
 ): Promise<Blob> => {
   return new Promise(async (resolve, reject) => {
     try {
+        const { jsPDF } = await import('jspdf');
+        const pdfjsLib = await import('pdfjs-dist');
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://esm.sh/pdfjs-dist@4.0.379/build/pdf.worker.min.mjs`;
+
         const arrayBuffer = await file.arrayBuffer();
         const data = new Uint8Array(arrayBuffer);
 

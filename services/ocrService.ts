@@ -1,9 +1,6 @@
-import * as pdfjsLib from 'pdfjs-dist';
-import Tesseract from 'tesseract.js';
-import { jsPDF } from 'jspdf';
-
-// Configure PDF.js worker to use local file
-pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+import type * as pdfjsLib from 'pdfjs-dist';
+import type Tesseract from 'tesseract.js';
+import type { jsPDF } from 'jspdf';
 
 interface PageResult {
   imageData: string;
@@ -18,6 +15,13 @@ export const performOCR = async (
   onProgress: (progress: number) => void
 ): Promise<Blob> => {
   try {
+    const pdfjsLib = await import('pdfjs-dist');
+    const { default: Tesseract } = await import('tesseract.js');
+    const { jsPDF } = await import('jspdf');
+
+    // Configure PDF.js worker to use local file
+    pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+
     const arrayBuffer = await file.arrayBuffer();
     const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) });
     const pdf = await loadingTask.promise;

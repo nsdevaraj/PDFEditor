@@ -1,15 +1,14 @@
-import * as pdfjsLib from 'pdfjs-dist';
+import type * as pdfjsLib from 'pdfjs-dist';
 // Heavy libraries are now lazy-loaded via dynamic imports to reduce initial bundle size
-import { jsPDF } from 'jspdf';
-import JSZip from 'jszip';
+import type { jsPDF } from 'jspdf';
+import type JSZip from 'jszip';
 
 // Import types only
 import type { Paragraph } from 'docx';
 
-// Configure PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
-
 const getPDFDocument = async (file: File) => {
+  const pdfjsLib = await import('pdfjs-dist');
+  pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
   const arrayBuffer = await file.arrayBuffer();
   const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) });
   return await loadingTask.promise;
@@ -243,6 +242,8 @@ export const convertPDFToWord = async (file: File): Promise<Blob> => {
 export const convertWordToPDF = async (file: File): Promise<Blob> => {
   const { default: mammoth } = await import('mammoth');
   const { default: html2canvas } = await import('html2canvas');
+  const { jsPDF } = await import('jspdf');
+
   if (typeof window !== 'undefined') {
       (window as any).html2canvas = html2canvas;
   }
@@ -283,6 +284,8 @@ export const convertWordToPDF = async (file: File): Promise<Blob> => {
 export const convertExcelToPDF = async (file: File): Promise<Blob> => {
   const XLSX = await import('xlsx');
   const { default: html2canvas } = await import('html2canvas');
+  const { jsPDF } = await import('jspdf');
+
   if (typeof window !== 'undefined') {
       (window as any).html2canvas = html2canvas;
   }
@@ -330,6 +333,9 @@ export const convertExcelToPDF = async (file: File): Promise<Blob> => {
 };
 
 export const convertPPTToPDF = async (file: File): Promise<Blob> => {
+  const { default: JSZip } = await import('jszip');
+  const { jsPDF } = await import('jspdf');
+
   const arrayBuffer = await file.arrayBuffer();
   const zip = await JSZip.loadAsync(arrayBuffer);
 
@@ -410,6 +416,8 @@ export const convertPPTToPDF = async (file: File): Promise<Blob> => {
 };
 
 export const convertImageToPDF = async (file: File): Promise<Blob> => {
+  const { jsPDF } = await import('jspdf');
+
   return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = (event) => {
@@ -446,6 +454,8 @@ export const convertImageToPDF = async (file: File): Promise<Blob> => {
 
 export const convertHTMLToPDF = async (content: string, isUrl: boolean = false): Promise<Blob> => {
     const { default: html2canvas } = await import('html2canvas');
+    const { jsPDF } = await import('jspdf');
+
     if (typeof window !== 'undefined') {
         (window as any).html2canvas = html2canvas;
     }
