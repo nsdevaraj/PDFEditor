@@ -46,7 +46,11 @@ export const performOCR = async (
 
     // Queue of page indices to process
     const queue = Array.from({ length: totalPages }, (_, i) => i + 1);
-    const results: PageResult[] = new Array(totalPages);
+
+    // Interleaved assembly state
+    const bufferedPages = new Map<number, PageResult>();
+    let nextPageToAdd = 1;
+    let doc: jsPDF | null = null;
     let completedCount = 0;
 
     // Worker task function
@@ -96,14 +100,46 @@ export const performOCR = async (
             // Perform OCR using the blob
             const result = await worker.recognize(blob);
 
-            // Store result
-            results[pageIndex - 1] = {
+            // Store result in buffer
+            bufferedPages.set(pageIndex, {
                 imageData: base64Data,
                 widthPt: viewport.width / scale,
                 heightPt: viewport.height / scale,
                 lines: result.data?.lines || [],
                 pageIndex
-            };
+            });
+
+            // Process any sequential pages that are ready (Interleaved Assembly)
+            while (bufferedPages.has(nextPageToAdd)) {
+                const res = bufferedPages.get(nextPageToAdd)!;
+
+                if (!doc) {
+                    doc = new jsPDF({ unit: 'pt', format: [res.widthPt, res.heightPt] });
+                } else {
+                    doc.addPage([res.widthPt, res.heightPt]);
+                }
+
+                // Add image (fit to page)
+                doc.addImage(res.imageData, 'PNG', 0, 0, res.widthPt, res.heightPt);
+
+                // Add invisible text for searchability
+                // Note: We use the same scale as render
+                const textScale = 2.0;
+
+                for (const line of res.lines) {
+                    const x = line.bbox.x0 / textScale;
+                    const y = line.bbox.y1 / textScale;
+                    const h = (line.bbox.y1 - line.bbox.y0) / textScale;
+
+                    doc.setFontSize(h);
+                    doc.setTextColor(255, 255, 255);
+                    doc.text(line.text, x, y, { renderingMode: 'invisible' });
+                }
+
+                // Clear from buffer to free memory immediately
+                bufferedPages.delete(nextPageToAdd);
+                nextPageToAdd++;
+            }
 
             completedCount++;
             onProgress((completedCount / totalPages) * 100);
@@ -115,35 +151,6 @@ export const performOCR = async (
 
     // Terminate workers
     await Promise.all(workers.map(w => w.terminate()));
-
-    // Create PDF sequentially
-    let doc: jsPDF | null = null;
-
-    for (const res of results) {
-      if (!res) continue; // Should not happen if all pages processed
-
-      if (!doc) {
-        doc = new jsPDF({ unit: 'pt', format: [res.widthPt, res.heightPt] });
-      } else {
-        doc.addPage([res.widthPt, res.heightPt]);
-      }
-
-      // Add image (fit to page)
-      doc.addImage(res.imageData, 'PNG', 0, 0, res.widthPt, res.heightPt);
-
-      // Add invisible text for searchability
-      const scale = 2.0;
-
-      for (const line of res.lines) {
-          const x = line.bbox.x0 / scale;
-          const y = line.bbox.y1 / scale;
-          const h = (line.bbox.y1 - line.bbox.y0) / scale;
-
-          doc.setFontSize(h);
-          doc.setTextColor(255, 255, 255);
-          doc.text(line.text, x, y, { renderingMode: 'invisible' });
-      }
-    }
 
     if (!doc) throw new Error("Document creation failed");
     return doc.output('blob');
