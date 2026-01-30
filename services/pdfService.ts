@@ -92,6 +92,9 @@ export const compressPDF = async (
                  const pdfPageHeight = viewport.height / renderScale;
                  const orientation = pdfPageWidth > pdfPageHeight ? 'l' : 'p';
 
+                 // Cleanup page resources to reduce memory usage
+                 page.cleanup();
+
                  // Interleaved Assembly: Add to buffer and flush sequential pages
                  bufferedPages.set(i, { imgData, pdfPageWidth, pdfPageHeight, orientation });
 
@@ -121,6 +124,11 @@ export const compressPDF = async (
 
         // Run workers
         await Promise.all(Array.from({ length: Math.min(concurrency, totalPages) }, worker));
+
+        // Cleanup document resources
+        if (pdf.destroy) {
+            await pdf.destroy();
+        }
 
         if (pdfDoc) {
             const blob = pdfDoc.output('blob');
@@ -220,6 +228,9 @@ export const flattenPDF = async (
                  const pdfPageHeight = viewport.height / renderScale;
                  const orientation = pdfPageWidth > pdfPageHeight ? 'l' : 'p';
 
+                 // Cleanup page resources to reduce memory usage
+                 page.cleanup();
+
                  // Interleaved Assembly: Add to buffer and flush sequential pages
                  bufferedPages.set(i, { imgData, pdfPageWidth, pdfPageHeight, orientation });
 
@@ -249,6 +260,11 @@ export const flattenPDF = async (
 
         // Run workers
         await Promise.all(Array.from({ length: Math.min(concurrency, totalPages) }, worker));
+
+        // Cleanup document resources
+        if (pdf.destroy) {
+            await pdf.destroy();
+        }
 
         if (pdfDoc) {
             const blob = pdfDoc.output('blob');
