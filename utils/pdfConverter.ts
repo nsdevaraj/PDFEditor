@@ -1,12 +1,3 @@
-import * as pdfjsLib from 'pdfjs-dist';
-import JSZip from 'jszip';
-import UTIF from 'utif';
-
-// Configure worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.mjs',
-  import.meta.url
-).toString();
 
 const getConcurrencyLimit = () => {
   if (typeof navigator !== 'undefined' && navigator.hardwareConcurrency) {
@@ -20,6 +11,20 @@ export const convertPdfToImages = async (
   format: 'jpg' | 'png' | 'tiff',
   onProgress: (percent: number) => void
 ): Promise<Blob> => {
+  // Dynamically import heavy libraries to reduce initial bundle size
+  const pdfjsLib = await import('pdfjs-dist');
+  const { default: JSZip } = await import('jszip');
+  const { default: UTIF } = await import('utif');
+
+  // Configure worker
+  // We use the same worker configuration as before, but only when needed
+  if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+        'pdfjs-dist/build/pdf.worker.min.mjs',
+        import.meta.url
+      ).toString();
+  }
+
   const zip = new JSZip();
   const arrayBuffer = await file.arrayBuffer();
 
