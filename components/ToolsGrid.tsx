@@ -1,6 +1,4 @@
 import React, { useState, useRef, Suspense } from 'react';
-import type { PDFDocument } from 'pdf-lib';
-import { validatePDFCompliance } from '../services/geminiService';
 import { 
   FileText, 
   Image, 
@@ -28,21 +26,7 @@ import {
   Layers,
   Camera
 } from 'lucide-react';
-import { compressPDF, flattenPDF } from '../services/pdfService';
-import { repairPDF } from '../services/repairService';
-import {
-  convertPDFToExcel,
-  convertPDFToPPT,
-  convertPDFToWord,
-  convertWordToPDF,
-  convertExcelToPDF,
-  convertPPTToPDF,
-  convertImageToPDF,
-  convertHTMLToPDF
-} from '../services/conversionService';
 import { UploadedFile } from '../types';
-import { convertPdfToImages } from '../utils/pdfConverter';
-import { performOCR } from '../services/ocrService';
 
 // Lazy load heavy components to reduce initial bundle size
 const SplitPDF = React.lazy(() => import('./SplitPDF').then(module => ({ default: module.SplitPDF })));
@@ -149,6 +133,7 @@ export const ToolsGrid: React.FC = () => {
       setFileName('content.pdf');
       setProgress(20);
       try {
+          const { convertHTMLToPDF } = await import('../services/conversionService');
           const blob = await convertHTMLToPDF(htmlContent);
           setResultBlob(blob);
           const url = URL.createObjectURL(blob);
@@ -236,6 +221,7 @@ export const ToolsGrid: React.FC = () => {
 
       try {
         if (activeTool.title === "PDF to Excel") {
+           const { convertPDFToExcel } = await import('../services/conversionService');
            const blob = await convertPDFToExcel(file);
            setResultBlob(blob);
            const url = URL.createObjectURL(blob);
@@ -243,6 +229,7 @@ export const ToolsGrid: React.FC = () => {
            setStatus('success');
            setProgress(100);
         } else if (activeTool.title === "PDF to PPT") {
+           const { convertPDFToPPT } = await import('../services/conversionService');
            const blob = await convertPDFToPPT(file);
            setResultBlob(blob);
            const url = URL.createObjectURL(blob);
@@ -250,6 +237,7 @@ export const ToolsGrid: React.FC = () => {
            setStatus('success');
            setProgress(100);
         } else if (activeTool.title === "PDF to Word") {
+           const { convertPDFToWord } = await import('../services/conversionService');
            const blob = await convertPDFToWord(file);
            setResultBlob(blob);
            const url = URL.createObjectURL(blob);
@@ -257,6 +245,7 @@ export const ToolsGrid: React.FC = () => {
            setStatus('success');
            setProgress(100);
         } else if (activeTool.title === "Word to PDF") {
+            const { convertWordToPDF } = await import('../services/conversionService');
             const blob = await convertWordToPDF(file);
             setResultBlob(blob);
             const url = URL.createObjectURL(blob);
@@ -264,6 +253,7 @@ export const ToolsGrid: React.FC = () => {
             setStatus('success');
             setProgress(100);
         } else if (activeTool.title === "Excel to PDF") {
+            const { convertExcelToPDF } = await import('../services/conversionService');
             const blob = await convertExcelToPDF(file);
             setResultBlob(blob);
             const url = URL.createObjectURL(blob);
@@ -271,6 +261,7 @@ export const ToolsGrid: React.FC = () => {
             setStatus('success');
             setProgress(100);
         } else if (activeTool.title === "PPT to PDF") {
+            const { convertPPTToPDF } = await import('../services/conversionService');
             const blob = await convertPPTToPDF(file);
             setResultBlob(blob);
             const url = URL.createObjectURL(blob);
@@ -278,6 +269,7 @@ export const ToolsGrid: React.FC = () => {
             setStatus('success');
             setProgress(100);
         } else if (activeTool.title === "JPG to PDF") {
+            const { convertImageToPDF } = await import('../services/conversionService');
             const blob = await convertImageToPDF(file);
             setResultBlob(blob);
             const url = URL.createObjectURL(blob);
@@ -287,6 +279,7 @@ export const ToolsGrid: React.FC = () => {
         } else if (activeTool.title === "HTML to PDF") {
             // HTML File upload path
              const text = await file.text();
+             const { convertHTMLToPDF } = await import('../services/conversionService');
              const blob = await convertHTMLToPDF(text);
              setResultBlob(blob);
              const url = URL.createObjectURL(blob);
@@ -294,18 +287,21 @@ export const ToolsGrid: React.FC = () => {
              setStatus('success');
              setProgress(100);
         } else if (activeTool.title === "Compress PDF") {
+           const { compressPDF } = await import('../services/pdfService');
            const blob = await compressPDF(file, (p) => setProgress(p));
            setResultBlob(blob);
            const url = URL.createObjectURL(blob);
            setDownloadUrl(url);
            setStatus('success');
         } else if (activeTool.title === "Flatten PDF") {
+           const { flattenPDF } = await import('../services/pdfService');
            const blob = await flattenPDF(file, (p) => setProgress(p));
            setResultBlob(blob);
            const url = URL.createObjectURL(blob);
            setDownloadUrl(url);
            setStatus('success');
         } else if (activeTool.title === "Repair PDF") {
+           const { repairPDF } = await import('../services/repairService');
            const blob = await repairPDF(file);
            setResultBlob(blob);
            const url = URL.createObjectURL(blob);
@@ -313,6 +309,7 @@ export const ToolsGrid: React.FC = () => {
            setStatus('success');
            setProgress(100);
         } else if (activeTool.title === 'OCR') {
+           const { performOCR } = await import('../services/ocrService');
            const blob = await performOCR(file, (p) => setProgress(p));
            setResultBlob(blob);
            const url = URL.createObjectURL(blob);
@@ -324,6 +321,7 @@ export const ToolsGrid: React.FC = () => {
            reader.onload = async (event) => {
              if (event.target && event.target.result) {
                const base64Data = (event.target.result as string).split(',')[1];
+               const { validatePDFCompliance } = await import('../services/geminiService');
                const report = await validatePDFCompliance(base64Data, file.type);
                setValidationResult(report);
                setStatus('success');
@@ -392,6 +390,7 @@ export const ToolsGrid: React.FC = () => {
     setProgress(0);
 
     try {
+      const { convertPdfToImages } = await import('../utils/pdfConverter');
       const result = await convertPdfToImages(selectedFile, outputFormat, (p) => {
         setProgress(p);
       });
