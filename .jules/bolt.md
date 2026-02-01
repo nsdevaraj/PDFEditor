@@ -7,3 +7,6 @@
 ## 2024-05-25 - [Static Imports in Utility Functions]
 **Learning:** Even if components are lazy-loaded, utility functions with static imports (like `convertPdfToImages` importing `pdfjs-dist`) can cause heavy dependencies to be bundled into the parent chunk (`ToolsGrid`), defeating the purpose of code splitting.
 **Action:** Always use dynamic imports (`await import(...)`) for heavy libraries inside utility functions that are not used immediately on page load.
+## 2026-02-01 - [Playwright Sidebar Ambiguity]
+**Learning:** When testing the sidebar navigation with Playwright, using `get_by_text("Convert")` or `get_by_role("button", name="Convert")` failed due to strict mode violation because both the desktop sidebar and the hidden mobile menu were matched.
+**Action:** Always scope locators to the visible container (e.g., `page.locator("aside")` for desktop sidebar) when identical navigation elements exist for responsive layouts.
