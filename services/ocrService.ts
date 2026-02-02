@@ -3,7 +3,7 @@ import type Tesseract from 'tesseract.js';
 import type { jsPDF } from 'jspdf';
 
 interface PageResult {
-  imageData: string;
+  imageData: Uint8Array;
   widthPt: number;
   heightPt: number;
   lines: { text: string; bbox: any }[];
@@ -89,20 +89,17 @@ export const performOCR = async (
               }, 'image/png');
             });
 
-            // Convert blob to base64 asynchronously for PDF generation later
-            const base64Data = await new Promise<string>((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onloadend = () => resolve(reader.result as string);
-              reader.onerror = reject;
-              reader.readAsDataURL(blob);
-            });
+            // Convert blob to Uint8Array for PDF generation later
+            // Optimization: Avoid base64 string allocation (33% overhead) by using Uint8Array directly
+            const buffer = await blob.arrayBuffer();
+            const imageData = new Uint8Array(buffer);
 
             // Perform OCR using the blob
             const result = await worker.recognize(blob);
 
             // Store result in buffer
             bufferedPages.set(pageIndex, {
-                imageData: base64Data,
+                imageData,
                 widthPt: viewport.width / scale,
                 heightPt: viewport.height / scale,
                 lines: result.data?.lines || [],
