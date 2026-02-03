@@ -48,13 +48,20 @@ export const ComparePDF: React.FC<ComparePDFProps> = ({ file, onClose }) => {
     const loadFirstPdf = async () => {
       try {
         setIsLoading(true);
-        const raw = atob(file.content);
-        const uint8Array = new Uint8Array(raw.length);
-        for (let i = 0; i < raw.length; i++) {
-          uint8Array[i] = raw.charCodeAt(i);
+
+        let data: Uint8Array;
+        if (file.originalFile) {
+            const buffer = await file.originalFile.arrayBuffer();
+            data = new Uint8Array(buffer);
+        } else {
+            const raw = atob(file.content || '');
+            data = new Uint8Array(raw.length);
+            for (let i = 0; i < raw.length; i++) {
+                data[i] = raw.charCodeAt(i);
+            }
         }
 
-        const loadingTask = pdfjsLib.getDocument({ data: uint8Array });
+        const loadingTask = pdfjsLib.getDocument({ data });
         const pdf = await loadingTask.promise;
         setPdf1(pdf);
         setNumPages1(pdf.numPages);
@@ -66,9 +73,7 @@ export const ComparePDF: React.FC<ComparePDFProps> = ({ file, onClose }) => {
       }
     };
 
-    if (file.content) {
-      loadFirstPdf();
-    }
+    loadFirstPdf();
   }, [file]);
 
   // Load second PDF when file is selected
@@ -78,13 +83,20 @@ export const ComparePDF: React.FC<ComparePDFProps> = ({ file, onClose }) => {
 
       try {
         setIsLoading(true);
-        const raw = atob(secondFile.content);
-        const uint8Array = new Uint8Array(raw.length);
-        for (let i = 0; i < raw.length; i++) {
-          uint8Array[i] = raw.charCodeAt(i);
+
+        let data: Uint8Array;
+        if (secondFile.originalFile) {
+            const buffer = await secondFile.originalFile.arrayBuffer();
+            data = new Uint8Array(buffer);
+        } else {
+            const raw = atob(secondFile.content || '');
+            data = new Uint8Array(raw.length);
+            for (let i = 0; i < raw.length; i++) {
+                data[i] = raw.charCodeAt(i);
+            }
         }
 
-        const loadingTask = pdfjsLib.getDocument({ data: uint8Array });
+        const loadingTask = pdfjsLib.getDocument({ data });
         const pdf = await loadingTask.promise;
         setPdf2(pdf);
         setNumPages2(pdf.numPages);
@@ -180,23 +192,14 @@ export const ComparePDF: React.FC<ComparePDFProps> = ({ file, onClose }) => {
   const handleSecondFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          const fullBase64 = event.target.result as string;
-          const content = fullBase64.split(',')[1];
-          setSecondFile({
-            name: file.name,
-            type: file.type,
-            size: file.size,
-            dataUrl: fullBase64,
-            content: content,
-            lastModified: file.lastModified,
-            fileUrl: URL.createObjectURL(file)
-          });
-        }
-      };
-      reader.readAsDataURL(file);
+      setSecondFile({
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        lastModified: file.lastModified,
+        fileUrl: URL.createObjectURL(file),
+        originalFile: file
+      });
     }
   };
 

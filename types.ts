@@ -11,10 +11,11 @@ export interface UploadedFile {
   name: string;
   type: string;
   size: number;
-  dataUrl: string; // Base64 full string
-  content: string; // Base64 raw content (split from header)
+  dataUrl?: string; // Base64 full string
+  content?: string; // Base64 raw content (split from header)
   lastModified: number;
   fileUrl?: string; // Blob URL for efficient preview
+  originalFile?: File; // The original File object for efficient processing
 }
 
 export interface ChatMessage {

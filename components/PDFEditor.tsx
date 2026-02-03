@@ -142,13 +142,24 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
     const loadPdf = async () => {
       try {
         setIsRendering(true);
-        const raw = atob(file.content);
-        const uint8Array = new Uint8Array(raw.length);
-        for (let i = 0; i < raw.length; i++) {
-          uint8Array[i] = raw.charCodeAt(i);
+
+        let data: Uint8Array;
+        if (file.content) {
+          const raw = atob(file.content);
+          data = new Uint8Array(raw.length);
+          for (let i = 0; i < raw.length; i++) {
+            data[i] = raw.charCodeAt(i);
+          }
+        } else if (file.originalFile) {
+           const buffer = await file.originalFile.arrayBuffer();
+           data = new Uint8Array(buffer);
+        } else {
+           console.error("No content available for PDF");
+           setIsRendering(false);
+           return;
         }
 
-        const loadingTask = pdfjsLib.getDocument({ data: uint8Array });
+        const loadingTask = pdfjsLib.getDocument({ data });
         const pdf = await loadingTask.promise;
         setPdfDoc(pdf);
         setNumPages(pdf.numPages);
@@ -470,6 +481,18 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
   const handleSendMessage = async () => {
     if (!input.trim() || isAiProcessing) return;
 
+    // Ensure content is available for AI analysis
+    if (!file.content && !file.originalFile) {
+        setMessages(prev => [...prev, {
+            id: Date.now().toString(),
+            role: 'model',
+            text: "I cannot analyze this document because the content is not available.",
+            timestamp: new Date(),
+            isError: true
+        }]);
+        return;
+    }
+
     const userMsg: ChatMessage = {
       id: Date.now().toString(),
       role: 'user',
@@ -487,7 +510,24 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
         parts: [{ text: m.text }]
       }));
 
-      const responseText = await chatWithDocument(history, userMsg.text, file.content, file.type);
+      let contentToAnalyze = file.content || "";
+      if (!contentToAnalyze && file.originalFile) {
+          // If content is missing but originalFile exists, we might need to read it.
+          // For now, let's assume content is present for chat scenarios or handle it gracefully.
+          // Since chatWithDocument expects base64 string, we would need to convert arrayBuffer to base64 here if strictly needed.
+          // Optimization: Ideally chatWithDocument should accept ArrayBuffer or Blob, but that's a larger refactor.
+          const buffer = await file.originalFile.arrayBuffer();
+          // Convert buffer to base64 string efficiently
+          let binary = '';
+          const bytes = new Uint8Array(buffer);
+          const len = bytes.byteLength;
+          for (let i = 0; i < len; i++) {
+              binary += String.fromCharCode(bytes[i]);
+          }
+          contentToAnalyze = btoa(binary);
+      }
+
+      const responseText = await chatWithDocument(history, userMsg.text, contentToAnalyze, file.type);
       
       const aiMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
