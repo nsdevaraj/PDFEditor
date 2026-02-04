@@ -418,38 +418,42 @@ export const convertPPTToPDF = async (file: File): Promise<Blob> => {
 export const convertImageToPDF = async (file: File): Promise<Blob> => {
   const { jsPDF } = await import('jspdf');
 
-  return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-          if (event.target?.result) {
-              const imgData = event.target.result as string;
+  // Optimization: Use arrayBuffer + createImageBitmap to avoid Base64 overhead (readAsDataURL)
+  // and synchronous Image parsing. This reduces main thread blocking and memory usage.
+  const arrayBuffer = await file.arrayBuffer();
+  const uint8Array = new Uint8Array(arrayBuffer);
 
-              const img = new Image();
-              img.src = imgData;
-              img.onload = () => {
-                  const width = img.width;
-                  const height = img.height;
+  // Create ImageBitmap to get dimensions asynchronously without DOM overhead
+  // Note: createImageBitmap is widely supported in modern browsers
+  const bitmap = await createImageBitmap(file);
 
-                  // Calculate PDF page size based on image (points)
-                  // 1px = 0.75pt approx, but let's just use same units or fit to A4
-                  // Let's create PDF with same dimensions as image (converted to points? jsPDF default unit is mm usually but we can use pt)
-                  // If we use 'pt', we can just pass width/height
+  const width = bitmap.width;
+  const height = bitmap.height;
 
-                  const pdf = new jsPDF({
-                      orientation: width > height ? 'l' : 'p',
-                      unit: 'pt',
-                      format: [width, height]
-                  });
+  // Determine format from file type
+  // Default to JPEG if unknown, but jsPDF supports others if specified
+  let format = 'JPEG';
+  if (file.type === 'image/png') {
+      format = 'PNG';
+  } else if (file.type === 'image/webp') {
+      format = 'WEBP';
+  } else if (file.type === 'image/bmp') {
+      format = 'BMP';
+  }
 
-                  pdf.addImage(imgData, 'JPEG', 0, 0, width, height);
-                  resolve(pdf.output('blob'));
-              };
-              img.onerror = (e) => reject(e);
-          }
-      };
-      reader.onerror = (e) => reject(e);
-      reader.readAsDataURL(file);
+  const pdf = new jsPDF({
+      orientation: width > height ? 'l' : 'p',
+      unit: 'pt',
+      format: [width, height]
   });
+
+  // Pass Uint8Array directly to avoid string allocation
+  pdf.addImage(uint8Array, format, 0, 0, width, height);
+
+  // Close bitmap to release memory
+  bitmap.close();
+
+  return pdf.output('blob');
 };
 
 export const convertHTMLToPDF = async (content: string, isUrl: boolean = false): Promise<Blob> => {
