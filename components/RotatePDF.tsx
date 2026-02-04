@@ -46,13 +46,20 @@ export const RotatePDF: React.FC<RotatePDFProps> = ({ file, onClose }) => {
     const loadPdf = async () => {
       try {
         setIsLoading(true);
-        const raw = atob(file.content);
-        const uint8Array = new Uint8Array(raw.length);
-        for (let i = 0; i < raw.length; i++) {
-          uint8Array[i] = raw.charCodeAt(i);
+
+        let data: Uint8Array;
+        if (file.originalFile) {
+            const buffer = await file.originalFile.arrayBuffer();
+            data = new Uint8Array(buffer);
+        } else {
+            const raw = atob(file.content || '');
+            data = new Uint8Array(raw.length);
+            for (let i = 0; i < raw.length; i++) {
+                data[i] = raw.charCodeAt(i);
+            }
         }
 
-        const loadingTask = pdfjsLib.getDocument({ data: uint8Array });
+        const loadingTask = pdfjsLib.getDocument({ data });
         const pdf = await loadingTask.promise;
 
         // Cleanup previous URLs if file changed without unmounting
@@ -102,9 +109,7 @@ export const RotatePDF: React.FC<RotatePDFProps> = ({ file, onClose }) => {
       }
     };
 
-    if (file.content) {
-      loadPdf();
-    }
+    loadPdf();
   }, [file]);
 
   const rotatePage = (index: number, direction: 'cw' | 'ccw') => {
@@ -132,13 +137,19 @@ export const RotatePDF: React.FC<RotatePDFProps> = ({ file, onClose }) => {
     try {
       setIsProcessing(true);
 
-      const raw = atob(file.content);
-      const uint8Array = new Uint8Array(raw.length);
-      for (let i = 0; i < raw.length; i++) {
-        uint8Array[i] = raw.charCodeAt(i);
+      let pdfDoc: PDFDocument;
+      if (file.originalFile) {
+          const buffer = await file.originalFile.arrayBuffer();
+          pdfDoc = await PDFDocument.load(buffer);
+      } else {
+          const raw = atob(file.content || '');
+          const uint8Array = new Uint8Array(raw.length);
+          for (let i = 0; i < raw.length; i++) {
+            uint8Array[i] = raw.charCodeAt(i);
+          }
+          pdfDoc = await PDFDocument.load(uint8Array);
       }
 
-      const pdfDoc = await PDFDocument.load(uint8Array);
       const pages = pdfDoc.getPages();
 
       thumbnails.forEach((t, i) => {

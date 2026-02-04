@@ -164,23 +164,15 @@ export const ToolsGrid: React.FC = () => {
         // Components that need the file loaded first
         if (['Split PDF', 'Rotate PDF', 'Organize PDF', 'Page Numbers', 'Crop PDF',  'Compare PDF', 'Extract PDF Pages'].includes(activeTool?.title)) {
             const fileUrl = URL.createObjectURL(file);
-            const reader = new FileReader();
-            reader.onload = (event) => {
-            if (event.target?.result) {
-                const fullBase64 = event.target.result as string;
-                const content = fullBase64.split(',')[1];
-                setCurrentFile({
-                name: file.name,
-                type: file.type,
-                size: file.size,
-                dataUrl: fullBase64,
-                content: content,
-                lastModified: file.lastModified,
-                fileUrl: fileUrl
-                });
-            }
-            };
-            reader.readAsDataURL(file);
+            // Optimization: Avoid reading file content into base64 string to reduce memory usage and main thread blocking
+            setCurrentFile({
+              name: file.name,
+              type: file.type,
+              size: file.size,
+              lastModified: file.lastModified,
+              fileUrl: fileUrl,
+              originalFile: file
+            });
             return;
         }
 

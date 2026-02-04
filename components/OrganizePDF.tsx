@@ -48,13 +48,20 @@ export const OrganizePDF: React.FC<OrganizePDFProps> = ({ file, onClose }) => {
     const loadPdf = async () => {
       try {
         setIsLoading(true);
-        const raw = atob(file.content);
-        const uint8Array = new Uint8Array(raw.length);
-        for (let i = 0; i < raw.length; i++) {
-          uint8Array[i] = raw.charCodeAt(i);
+
+        let data: Uint8Array;
+        if (file.originalFile) {
+            const buffer = await file.originalFile.arrayBuffer();
+            data = new Uint8Array(buffer);
+        } else {
+            const raw = atob(file.content || '');
+            data = new Uint8Array(raw.length);
+            for (let i = 0; i < raw.length; i++) {
+                data[i] = raw.charCodeAt(i);
+            }
         }
 
-        const loadingTask = pdfjsLib.getDocument({ data: uint8Array });
+        const loadingTask = pdfjsLib.getDocument({ data });
         const pdf = await loadingTask.promise;
 
         const newThumbnails: PageThumbnail[] = [];
@@ -98,9 +105,7 @@ export const OrganizePDF: React.FC<OrganizePDFProps> = ({ file, onClose }) => {
       }
     };
 
-    if (file.content) {
-      loadPdf();
-    }
+    loadPdf();
   }, [file]);
 
   const movePage = (index: number, direction: 'left' | 'right') => {
@@ -124,13 +129,19 @@ export const OrganizePDF: React.FC<OrganizePDFProps> = ({ file, onClose }) => {
     try {
       setIsProcessing(true);
 
-      const raw = atob(file.content);
-      const uint8Array = new Uint8Array(raw.length);
-      for (let i = 0; i < raw.length; i++) {
-        uint8Array[i] = raw.charCodeAt(i);
+      let srcDoc: PDFDocument;
+      if (file.originalFile) {
+          const buffer = await file.originalFile.arrayBuffer();
+          srcDoc = await PDFDocument.load(buffer);
+      } else {
+          const raw = atob(file.content || '');
+          const uint8Array = new Uint8Array(raw.length);
+          for (let i = 0; i < raw.length; i++) {
+            uint8Array[i] = raw.charCodeAt(i);
+          }
+          srcDoc = await PDFDocument.load(uint8Array);
       }
 
-      const srcDoc = await PDFDocument.load(uint8Array);
       const newDoc = await PDFDocument.create();
 
       const indicesToCopy = thumbnails.map(t => t.originalIndex);

@@ -36,13 +36,20 @@ export const PageNumbersPDF: React.FC<PageNumbersPDFProps> = ({ file, onClose })
     const loadPdf = async () => {
       try {
         setIsLoading(true);
-        const raw = atob(file.content);
-        const uint8Array = new Uint8Array(raw.length);
-        for (let i = 0; i < raw.length; i++) {
-          uint8Array[i] = raw.charCodeAt(i);
+
+        let data: Uint8Array;
+        if (file.originalFile) {
+            const buffer = await file.originalFile.arrayBuffer();
+            data = new Uint8Array(buffer);
+        } else {
+            const raw = atob(file.content || '');
+            data = new Uint8Array(raw.length);
+            for (let i = 0; i < raw.length; i++) {
+                data[i] = raw.charCodeAt(i);
+            }
         }
 
-        const loadingTask = pdfjsLib.getDocument({ data: uint8Array });
+        const loadingTask = pdfjsLib.getDocument({ data });
         const pdf = await loadingTask.promise;
         setTotalPages(pdf.numPages);
 
@@ -70,9 +77,7 @@ export const PageNumbersPDF: React.FC<PageNumbersPDFProps> = ({ file, onClose })
       }
     };
 
-    if (file.content) {
-      loadPdf();
-    }
+    loadPdf();
   }, [file]);
 
   const getPreviewText = () => {
@@ -102,13 +107,19 @@ export const PageNumbersPDF: React.FC<PageNumbersPDFProps> = ({ file, onClose })
     try {
       setIsProcessing(true);
 
-      const raw = atob(file.content);
-      const uint8Array = new Uint8Array(raw.length);
-      for (let i = 0; i < raw.length; i++) {
-        uint8Array[i] = raw.charCodeAt(i);
+      let pdfDoc: PDFDocument;
+      if (file.originalFile) {
+          const buffer = await file.originalFile.arrayBuffer();
+          pdfDoc = await PDFDocument.load(buffer);
+      } else {
+          const raw = atob(file.content || '');
+          const uint8Array = new Uint8Array(raw.length);
+          for (let i = 0; i < raw.length; i++) {
+            uint8Array[i] = raw.charCodeAt(i);
+          }
+          pdfDoc = await PDFDocument.load(uint8Array);
       }
 
-      const pdfDoc = await PDFDocument.load(uint8Array);
       const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
       const pages = pdfDoc.getPages();
       const count = pages.length;
