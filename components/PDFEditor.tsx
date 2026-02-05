@@ -562,7 +562,7 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
       onClick={() => { setActiveMenu(null); setShowExportMenu(false); }}
     >
       {/* Top Bar */}
-      <div className="absolute top-0 left-0 right-0 h-16 bg-white shadow-sm flex items-center justify-between px-4 z-10 border-b border-slate-200">
+      <div className="absolute top-0 left-0 right-0 h-16 bg-white shadow-sm flex items-center justify-between px-4 z-50 border-b border-slate-200">
         <div className="flex items-center space-x-3">
             <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg text-slate-500">
                 <ChevronLeft className="w-5 h-5" />
@@ -830,7 +830,7 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
                 style={{ 
                     minHeight: '400px',
                     minWidth: '300px',
-                    cursor: interactionMode === 'hand' ? 'grab' : interactionMode === 'draw' ? 'crosshair' : interactionMode === 'eraser' ? 'not-allowed' : 'default',
+                    cursor: interactionMode === 'hand' ? 'grab' : interactionMode === 'draw' ? 'crosshair' : interactionMode === 'eraser' ? 'crosshair' : 'default',
                     userSelect: 'none'
                 }}
             >
