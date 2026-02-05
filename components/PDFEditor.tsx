@@ -38,11 +38,6 @@ import {
   AlignLeft,
   Palette
 } from 'lucide-react';
-import { chatWithDocument } from '../services/geminiService';
-import * as pdfjsLib from 'pdfjs-dist';
-
-// Configure PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://esm.sh/pdfjs-dist@4.0.379/build/pdf.worker.min.mjs`;
 
 interface PDFEditorProps {
   file: UploadedFile;
@@ -142,6 +137,9 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
     const loadPdf = async () => {
       try {
         setIsRendering(true);
+
+        const pdfjsLib = await import('pdfjs-dist');
+        pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
         let data: Uint8Array;
         if (file.content) {
@@ -527,6 +525,7 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
           contentToAnalyze = btoa(binary);
       }
 
+      const { chatWithDocument } = await import('../services/geminiService');
       const responseText = await chatWithDocument(history, userMsg.text, contentToAnalyze, file.type);
       
       const aiMsg: ChatMessage = {
