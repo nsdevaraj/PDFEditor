@@ -22,17 +22,39 @@ const getConcurrencyLimit = () => {
   return 4; // Conservative default
 };
 
-const processPagesInBatches = async <T>(
+/**
+ * Processes pages concurrently but ensures the results are handled in strict sequential order.
+ * This "Interleaved Assembly" pattern reduces peak memory usage by allowing pages to be
+ * flushed to the output document immediately upon completion, rather than buffering all
+ * results in memory until the end.
+ */
+const processPagesInterleaved = async <T>(
   pdf: any,
   concurrency: number,
-  processPage: (pageNum: number) => Promise<T>
-): Promise<T[]> => {
-  const results: T[] = new Array(pdf.numPages);
+  processPage: (pageNum: number) => Promise<T>,
+  onPageComplete: (result: T, pageNum: number) => Promise<void> | void
+): Promise<void> => {
   const executing = new Set<Promise<void>>();
+  const buffer = new Map<number, T>();
+  let nextPageIndex = 1;
 
   for (let i = 1; i <= pdf.numPages; i++) {
-    const p = processPage(i).then((res) => {
-      results[i - 1] = res;
+    const p = processPage(i).then(async (res) => {
+      buffer.set(i, res);
+
+      // Flush loop: Ensure strict order
+      // We check if the next expected page is available in the buffer
+      while (buffer.has(nextPageIndex)) {
+        const data = buffer.get(nextPageIndex)!;
+        buffer.delete(nextPageIndex);
+
+        const currentPage = nextPageIndex;
+        // Increment BEFORE awaiting callback to prevent other concurrent workers
+        // from attempting to process the same index if they complete while we await
+        nextPageIndex++;
+
+        await onPageComplete(data, currentPage);
+      }
     });
 
     const wrapper = p.then(() => {
@@ -46,7 +68,15 @@ const processPagesInBatches = async <T>(
     }
   }
   await Promise.all(executing);
-  return results;
+
+  // Final flush check (handles any remaining pages if loop finished but buffer wasn't empty)
+  while (buffer.has(nextPageIndex)) {
+    const data = buffer.get(nextPageIndex)!;
+    buffer.delete(nextPageIndex);
+    const currentPage = nextPageIndex;
+    nextPageIndex++;
+    await onPageComplete(data, currentPage);
+  }
 };
 
 const extractRowsFromPage = async (page: any): Promise<string[][]> => {
@@ -132,10 +162,8 @@ export const convertPDFToExcel = async (file: File): Promise<Blob> => {
     return rows;
   };
 
-  const allPageRows = await processPagesInBatches(pdf, getConcurrencyLimit(), processPage);
-
-  allPageRows.forEach((sheetData, index) => {
-    const pageNum = index + 1;
+  // Optimization: Use Interleaved Assembly to avoid buffering all rows in memory
+  await processPagesInterleaved(pdf, getConcurrencyLimit(), processPage, (sheetData, pageNum) => {
     const ws = XLSX.utils.aoa_to_sheet(sheetData);
     XLSX.utils.book_append_sheet(wb, ws, `Page ${pageNum}`);
   });
@@ -157,9 +185,8 @@ export const convertPDFToPPT = async (file: File): Promise<Blob> => {
     return { viewport, textContent };
   };
 
-  const pagesData = await processPagesInBatches(pdf, getConcurrencyLimit(), processPage);
-
-  pagesData.forEach(({ viewport, textContent }) => {
+  // Optimization: Use Interleaved Assembly to add slides as they are processed
+  await processPagesInterleaved(pdf, getConcurrencyLimit(), processPage, ({ viewport, textContent }) => {
     const slide = pptx.addSlide();
 
     // Set slide size roughly to PDF size (optional, PPT usually has defaults)
@@ -203,11 +230,10 @@ export const convertPDFToWord = async (file: File): Promise<Blob> => {
     return rows.map(row => row.join(' '));
   };
 
-  const allPageRows = await processPagesInBatches(pdf, getConcurrencyLimit(), processPage);
-
   const allChildren: Paragraph[] = [];
 
-  allPageRows.forEach((rows, index) => {
+  // Optimization: Use Interleaved Assembly to build document incrementally
+  await processPagesInterleaved(pdf, getConcurrencyLimit(), processPage, (rows, pageNum) => {
     // If there are rows, add them as paragraphs
     rows.forEach(text => {
       if (text.trim()) {
@@ -219,9 +245,9 @@ export const convertPDFToWord = async (file: File): Promise<Blob> => {
     });
 
     // Add a page break between pages (except the last one)
-    if (index + 1 < pdf.numPages) {
-      // docx automatically handles pagination, but we can force a break if we want strict page mapping.
-      // For flowable documents (Word), letting it flow is usually better, but let's add a visual separator or empty line if needed.
+    if (pageNum < pdf.numPages) {
+       // Ideally we would add a PageBreak here if docx supports explicit page breaks between sections
+       // or just rely on flow. For now, maintaining original logic which was checking index + 1 < numPages
     }
   });
 
