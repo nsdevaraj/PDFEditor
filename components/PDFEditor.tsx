@@ -591,16 +591,7 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
                     <MousePointer2 className="w-4 h-4" />
                 </button>
             </div>
-
-            <div className="w-px h-5 bg-slate-200 mx-1"></div>
-
-            <button className="flex items-center space-x-1 px-3 py-1.5 text-slate-700 hover:bg-slate-50 rounded-lg border border-slate-200 text-sm font-medium">
-                <Type className="w-4 h-4" />
-                <span>Edit Text</span>
-            </button>
-
-            <div className="w-px h-5 bg-slate-200 mx-1"></div>
-
+ 
              {/* Color Picker */}
              <div className="relative group">
                 <button className="p-2 rounded-lg flex items-center space-x-1 text-slate-600 hover:bg-slate-50">
@@ -623,34 +614,7 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
             >
                 <Type className="w-5 h-5" />
             </button>
-
-            {/* Pencil Dropdown */}
-            <div className="relative">
-                <button 
-                    onClick={() => setActiveMenu(activeMenu === 'pencil' ? null : 'pencil')}
-                    className={`p-2 rounded-lg flex items-center space-x-1 ${activeMenu === 'pencil' ? 'bg-blue-50 text-blue-600' : 'text-slate-600 hover:bg-slate-50'}`}
-                >
-                    <Pen className="w-4 h-4" />
-                    <ChevronDown className="w-3 h-3" />
-                </button>
-                {activeMenu === 'pencil' && (
-                    <div className="absolute top-full left-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-slate-100 py-1 z-50">
-                        <button onClick={() => startDrawingMode('#000000', 2, 1)} className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center space-x-2 text-sm text-slate-700">
-                            <Pen className="w-4 h-4" />
-                            <span>Pencil</span>
-                        </button>
-                        <button onClick={() => startDrawingMode('#fde047', 15, 0.4)} className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center space-x-2 text-sm text-slate-700">
-                            <Highlighter className="w-4 h-4" />
-                            <span>Highlight</span>
-                        </button>
-                        <button onClick={() => { setInteractionMode('eraser'); setActiveMenu(null); setSelectedId(null); }} className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center space-x-2 text-sm text-slate-700">
-                            <Eraser className="w-4 h-4" />
-                            <span>Eraser</span>
-                        </button>
-                    </div>
-                )}
-            </div>
-
+ 
             {/* Markup Dropdown */}
             <div className="relative">
                 <button 
