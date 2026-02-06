@@ -607,6 +607,14 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
                 />
             </div>
 
+            <button
+                onClick={() => startDrawingMode('#000000', 2, 1)}
+                className={`p-2 rounded-lg transition-colors ${interactionMode === 'draw' ? 'bg-blue-50 text-blue-600' : 'text-slate-600 hover:text-blue-600 hover:bg-slate-50'}`}
+                title="Freehand Draw"
+            >
+                <Pen className="w-4 h-4" />
+            </button>
+
             <button 
                 onClick={() => addElementCentered('text')}
                 className="p-2 text-slate-600 hover:text-blue-600 hover:bg-slate-50 rounded-lg transition-colors"
