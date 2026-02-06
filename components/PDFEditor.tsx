@@ -103,6 +103,32 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [showExportMenu, setShowExportMenu] = useState(false);
 
+  // Customizable Defaults
+  const [defaultSignature, setDefaultSignature] = useState(() => {
+    if (typeof localStorage !== 'undefined') {
+      return localStorage.getItem('defaultSignature') || 'Alex. L';
+    }
+    return 'Alex. L';
+  });
+  const [defaultInitials, setDefaultInitials] = useState(() => {
+    if (typeof localStorage !== 'undefined') {
+      return localStorage.getItem('defaultInitials') || 'Initials';
+    }
+    return 'Initials';
+  });
+
+  useEffect(() => {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('defaultSignature', defaultSignature);
+    }
+  }, [defaultSignature]);
+
+  useEffect(() => {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('defaultInitials', defaultInitials);
+    }
+  }, [defaultInitials]);
+
   const [pdfDoc, setPdfDoc] = useState<any>(null);
   const [isRendering, setIsRendering] = useState(false);
   
@@ -251,7 +277,7 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
           x: (viewportWidth / 2) - 50,
           y: (viewportHeight / 2) - 20,
           page: currentPage,
-          content: type === 'text' ? 'Type here...' : type === 'signature' ? 'Alex. L' : undefined,
+          content: type === 'text' ? 'Type here...' : type === 'signature' ? defaultSignature : undefined,
           width: type === 'highlight' ? 200 : type === 'rectangle' || type === 'circle' ? 100 : type === 'line' || type === 'arrow' || type === 'underline' || type === 'strike' || type === 'squiggle' ? 150 : undefined,
           height: type === 'highlight' || type === 'underline' || type === 'strike' || type === 'squiggle' ? 20 : type === 'rectangle' || type === 'circle' ? 100 : type === 'line' || type === 'arrow' ? 2 : undefined,
           strokeColor: defaultColor,
@@ -693,17 +719,38 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
                 <button 
                     onClick={() => setActiveMenu(activeMenu === 'sign' ? null : 'sign')}
                     className={`p-2 rounded-lg flex items-center space-x-1 ${activeMenu === 'sign' ? 'bg-blue-50 text-blue-600' : 'text-slate-600 hover:bg-slate-50'}`}
+                    aria-label="Signature Menu"
                 >
                     <FileSignature className="w-4 h-4" />
                     <ChevronDown className="w-3 h-3" />
                 </button>
                 {activeMenu === 'sign' && (
-                    <div className="absolute top-full left-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-slate-100 py-1 z-50">
+                    <div className="absolute top-full left-0 mt-2 w-64 bg-white rounded-lg shadow-xl border border-slate-100 py-2 z-50">
+                        <div className="px-4 py-2 border-b border-slate-100 mb-1">
+                            <span className="text-xs font-semibold text-slate-400 uppercase block mb-1">Signature Text</span>
+                            <input
+                                type="text"
+                                value={defaultSignature}
+                                onChange={(e) => setDefaultSignature(e.target.value)}
+                                onClick={(e) => e.stopPropagation()}
+                                className="w-full text-xs p-1.5 bg-slate-50 border border-slate-200 rounded mb-2 focus:outline-none focus:border-blue-400"
+                                placeholder="Your Name"
+                            />
+                            <span className="text-xs font-semibold text-slate-400 uppercase block mb-1">Initials Text</span>
+                            <input
+                                type="text"
+                                value={defaultInitials}
+                                onChange={(e) => setDefaultInitials(e.target.value)}
+                                onClick={(e) => e.stopPropagation()}
+                                className="w-full text-xs p-1.5 bg-slate-50 border border-slate-200 rounded focus:outline-none focus:border-blue-400"
+                                placeholder="Initials"
+                            />
+                        </div>
                         <button onClick={() => addElementCentered('signature')} className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center space-x-2 text-sm text-slate-700">
                             <FileSignature className="w-4 h-4" />
                             <span>Add Signature</span>
                         </button>
-                        <button onClick={() => addElementCentered('signature', { content: 'Initials' })} className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center space-x-2 text-sm text-slate-700">
+                        <button onClick={() => addElementCentered('signature', { content: defaultInitials })} className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center space-x-2 text-sm text-slate-700">
                             <Type className="w-4 h-4" />
                             <span>Add Initials</span>
                         </button>
