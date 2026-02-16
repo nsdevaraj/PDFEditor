@@ -13,7 +13,8 @@ import {
   LogOut,
   Zap,
   X,
-  Loader2
+  Loader2,
+  Workflow
 } from 'lucide-react';
 
 // Lazy load components for better performance (code splitting)
@@ -21,6 +22,7 @@ const PDFEditor = React.lazy(() => import('./components/PDFEditor').then(module 
 const ToolsGrid = React.lazy(() => import('./components/ToolsGrid').then(module => ({ default: module.ToolsGrid })));
 const ESignDashboard = React.lazy(() => import('./components/ESignDashboard').then(module => ({ default: module.ESignDashboard })));
 const FormsPage = React.lazy(() => import('./components/FormsPage').then(module => ({ default: module.FormsPage })));
+const WorkflowEditor = React.lazy(() => import('./components/Workflow/WorkflowEditor').then(module => ({ default: module.WorkflowEditor })));
 const SettingsPage = React.lazy(() => import('./components/SettingsPage').then(module => ({ default: module.SettingsPage })));
 
 const App: React.FC = () => {
@@ -51,6 +53,8 @@ const App: React.FC = () => {
         return <ESignDashboard onUpload={handleUpload} />;
       case AppView.FORMS:
         return <FormsPage onUpload={handleUpload} onChangeView={setCurrentView} />;
+      case AppView.WORKFLOW:
+        return <WorkflowEditor />;
       case AppView.SETTINGS:
         return <SettingsPage />;
       case AppView.CONVERT:
@@ -67,6 +71,7 @@ const App: React.FC = () => {
     { id: AppView.DASHBOARD, icon: LayoutDashboard, label: 'Dashboard' },
     { id: AppView.EDITOR, icon: FileEdit, label: 'Edit PDF' },
     { id: AppView.CONVERT, icon: ArrowRightLeft, label: 'Convert' },
+    { id: AppView.WORKFLOW, icon: Workflow, label: 'Workflow' },
     { id: AppView.SIGN, icon: PenTool, label: 'eSign & Track' },
     { id: AppView.FORMS, icon: FileText, label: 'Forms' },
   ];
