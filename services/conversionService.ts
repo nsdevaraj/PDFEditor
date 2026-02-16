@@ -484,8 +484,20 @@ export const convertImageToPDF = async (file: File): Promise<Blob> => {
   try {
       bitmap = await createImageBitmap(file);
   } catch (e) {
-      // Fallback for unsupported formats
-      throw new Error(`Unsupported image format or corrupt file: ${file.type}`);
+      // Fallback: Try loading via Image element (handles some BMP/formats that createImageBitmap misses in some browsers)
+      try {
+          const img = document.createElement('img');
+          const url = URL.createObjectURL(file);
+          await new Promise((resolve, reject) => {
+              img.onload = resolve;
+              img.onerror = reject;
+              img.src = url;
+          });
+          bitmap = await createImageBitmap(img);
+          URL.revokeObjectURL(url);
+      } catch (err) {
+          throw new Error(`Unsupported image format or corrupt file: ${file.type}`);
+      }
   }
 
   const width = bitmap.width;
@@ -589,56 +601,76 @@ export const convertPDFToText = async (file: File): Promise<Blob> => {
 };
 
 export const convertPDFToJSON = async (file: File): Promise<Blob> => {
-    const pdf = await getPDFDocument(file);
-    let metadata: any = {};
     try {
-        metadata = await (pdf as any).getMetadata();
+        const pdf = await getPDFDocument(file);
+        let metadata: any = {};
+        try {
+            metadata = await (pdf as any).getMetadata();
+        } catch (e) {
+            metadata = { error: 'Could not extract metadata' };
+        }
+        const data: any = {
+            pageCount: pdf.numPages,
+            info: metadata,
+            pages: []
+        };
+
+        for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const viewport = page.getViewport({ scale: 1.0 });
+
+            // Robust text extraction
+            let textContent;
+            try {
+               textContent = await page.getTextContent();
+            } catch (e) {
+               textContent = { items: [] };
+            }
+
+            let rows: string[][] = [];
+            try {
+               rows = await extractRowsFromPage(page);
+            } catch (e) {
+               // Fallback if row extraction fails
+               rows = [];
+            }
+
+            // Build readable text from rows (preserves line structure)
+            const text = rows
+                .map(row => row.filter(s => s.trim()).join(' '))
+                .filter(line => line.trim())
+                .join('\n');
+
+            // Extract individual text items with position and font info
+            const items = textContent.items
+                .filter((item: any) => item.str && item.str.trim())
+                .map((item: any) => ({
+                    text: item.str,
+                    x: item.transform[4],
+                    y: viewport.height - item.transform[5],
+                    width: item.width,
+                    height: item.height,
+                    fontName: item.fontName || '',
+                    dir: item.dir || 'ltr',
+                }));
+
+            data.pages.push({
+                pageNumber: i,
+                width: viewport.width,
+                height: viewport.height,
+                text: text,
+                lines: rows.map(row => row.filter(s => s.trim()).join(' ')).filter(l => l.trim()),
+                items: items
+            });
+        }
+
+        const jsonStr = JSON.stringify(data, null, 2);
+        return new Blob([jsonStr], { type: 'application/json' });
     } catch (e) {
-        metadata = { error: 'Could not extract metadata' };
+        console.error("PDF to JSON failed", e);
+        // Return a dummy JSON with error to avoid 'corrupt' file feeling
+        return new Blob([JSON.stringify({ error: "Conversion failed", details: String(e) }, null, 2)], { type: 'application/json' });
     }
-    const data: any = {
-        pageCount: pdf.numPages,
-        info: metadata,
-        pages: []
-    };
-
-    for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const viewport = page.getViewport({ scale: 1.0 });
-        const textContent = await page.getTextContent();
-        const rows = await extractRowsFromPage(page);
-
-        // Build readable text from rows (preserves line structure)
-        const text = rows
-            .map(row => row.filter(s => s.trim()).join(' '))
-            .filter(line => line.trim())
-            .join('\n');
-
-        // Extract individual text items with position and font info
-        const items = textContent.items
-            .filter((item: any) => item.str && item.str.trim())
-            .map((item: any) => ({
-                text: item.str,
-                x: item.transform[4],
-                y: viewport.height - item.transform[5],
-                width: item.width,
-                height: item.height,
-                fontName: item.fontName || '',
-                dir: item.dir || 'ltr',
-            }));
-
-        data.pages.push({
-            pageNumber: i,
-            width: viewport.width,
-            height: viewport.height,
-            text: text,
-            lines: rows.map(row => row.filter(s => s.trim()).join(' ')).filter(l => l.trim()),
-            items: items
-        });
-    }
-
-    const jsonStr = JSON.stringify(data, null, 2);
-    return new Blob([jsonStr], { type: 'application/json' });
 };
 
 export const convertHTMLToPDF = async (content: string, isUrl: boolean = false): Promise<Blob> => {
