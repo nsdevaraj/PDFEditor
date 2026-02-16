@@ -34,7 +34,16 @@ export type WorkflowToolId =
   | 'excel-to-pdf'
   | 'ppt-to-pdf'
   | 'image-to-pdf'
-  | 'html-to-pdf';
+  | 'html-to-pdf'
+  | 'watermark'
+  | 'page-numbers'
+  | 'header-footer'
+  | 'linearize'
+  | 'grayscale'
+  | 'print-ready'
+  | 'epub-to-pdf'
+  | 'resize'
+  | 'metadata';
 
 // --- Core Actions ---
 
