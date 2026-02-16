@@ -590,21 +590,50 @@ export const convertPDFToText = async (file: File): Promise<Blob> => {
 
 export const convertPDFToJSON = async (file: File): Promise<Blob> => {
     const pdf = await getPDFDocument(file);
+    let metadata: any = {};
+    try {
+        metadata = await (pdf as any).getMetadata();
+    } catch (e) {
+        metadata = { error: 'Could not extract metadata' };
+    }
     const data: any = {
         pageCount: pdf.numPages,
-        info: await (pdf as any).getMetadata(),
+        info: metadata,
         pages: []
     };
 
     for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
+        const viewport = page.getViewport({ scale: 1.0 });
         const textContent = await page.getTextContent();
         const rows = await extractRowsFromPage(page);
 
+        // Build readable text from rows (preserves line structure)
+        const text = rows
+            .map(row => row.filter(s => s.trim()).join(' '))
+            .filter(line => line.trim())
+            .join('\n');
+
+        // Extract individual text items with position and font info
+        const items = textContent.items
+            .filter((item: any) => item.str && item.str.trim())
+            .map((item: any) => ({
+                text: item.str,
+                x: item.transform[4],
+                y: viewport.height - item.transform[5],
+                width: item.width,
+                height: item.height,
+                fontName: item.fontName || '',
+                dir: item.dir || 'ltr',
+            }));
+
         data.pages.push({
             pageNumber: i,
-            text: textContent.items.map((item: any) => item.str).join(' '),
-            rows: rows
+            width: viewport.width,
+            height: viewport.height,
+            text: text,
+            lines: rows.map(row => row.filter(s => s.trim()).join(' ')).filter(l => l.trim()),
+            items: items
         });
     }
 
