@@ -54,7 +54,7 @@ const App: React.FC = () => {
       case AppView.SETTINGS:
         return <SettingsPage />;
       case AppView.CONVERT:
-        return <ToolsGrid />;
+        return <ToolsGrid onNavigate={setCurrentView} />;
       // Fallback if user navigates to Editor without a file
       case AppView.EDITOR:
          return <Dashboard onUpload={handleUpload} onChangeView={setCurrentView} />;

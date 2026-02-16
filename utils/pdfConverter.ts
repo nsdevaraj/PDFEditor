@@ -8,7 +8,7 @@ const getConcurrencyLimit = () => {
 
 export const convertPdfToImages = async (
   file: File,
-  format: 'jpg' | 'png' | 'tiff',
+  format: 'jpg' | 'png' | 'tiff' | 'webp' | 'bmp',
   onProgress: (percent: number) => void
 ): Promise<Blob> => {
   // Dynamically import heavy libraries to reduce initial bundle size
@@ -33,7 +33,10 @@ export const convertPdfToImages = async (
   const pdf = await loadingTask.promise;
   const numPages = pdf.numPages;
 
-  const extension = format === 'jpg' ? 'jpg' : format === 'tiff' ? 'tiff' : 'png';
+  const extension = format === 'jpg' ? 'jpg' :
+                   format === 'tiff' ? 'tiff' :
+                   format === 'webp' ? 'webp' :
+                   format === 'bmp' ? 'bmp' : 'png';
   let processedCount = 0;
 
   // Parallel processing configuration
@@ -97,7 +100,10 @@ export const convertPdfToImages = async (
                  const tiffData = UTIF.encodeImage(imageData.data, canvas.width, canvas.height);
                  blob = new Blob([tiffData], { type: 'image/tiff' });
              } else {
-                 const mimeType = format === 'jpg' ? 'image/jpeg' : 'image/png';
+                 let mimeType = 'image/png';
+                 if (format === 'jpg') mimeType = 'image/jpeg';
+                 if (format === 'webp') mimeType = 'image/webp';
+                 if (format === 'bmp') mimeType = 'image/bmp';
 
                  if (useOffscreen && canvas instanceof OffscreenCanvas) {
                      blob = await canvas.convertToBlob({ type: mimeType, quality: 0.9 });

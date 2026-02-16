@@ -24,9 +24,30 @@ import {
   Wrench,
   Globe,
   Layers,
-  Camera
+  Camera,
+  PenTool,
+  Book,
+  FileCode,
+  FileImage,
+  LayoutGrid,
+  Columns,
+  Grid,
+  Maximize,
+  Minimize,
+  RefreshCcw,
+  Shield,
+  EyeOff,
+  Type,
+  Palette,
+  Folder,
+  Trash2,
+  Save,
+  Printer,
+  File,
+  Search,
+  Settings
 } from 'lucide-react';
-import { UploadedFile } from '../types';
+import { UploadedFile, AppView } from '../types';
 
 // Lazy load heavy components to reduce initial bundle size
 const SplitPDF = React.lazy(() => import('./SplitPDF').then(module => ({ default: module.SplitPDF })));
@@ -43,7 +64,11 @@ const FallbackLoader = () => (
   </div>
 );
 
-export const ToolsGrid: React.FC = () => {
+interface ToolsGridProps {
+  onNavigate?: (view: AppView) => void;
+}
+
+export const ToolsGrid: React.FC<ToolsGridProps> = ({ onNavigate }) => {
   const [activeTool, setActiveTool] = useState<any>(null);
   const [status, setStatus] = useState<'idle' | 'configuring' | 'processing' | 'success' | 'waiting_password' | 'selecting_html_input'>('idle');
   const [fileName, setFileName] = useState('');
@@ -66,35 +91,87 @@ export const ToolsGrid: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const tools = [
-    { title: "Compare PDF", desc: "Overlay and compare two PDF files", icon: Layers, color: "text-indigo-600", bg: "bg-indigo-100", ext: "" },
-    { title: "Rotate PDF", desc: "Rotate pages left or right", icon: RotateCw, color: "text-blue-600", bg: "bg-blue-100", ext: "_rotated.pdf" },
-    { title: "Organize PDF", desc: "Sort and reorder pages", icon: ArrowLeftRight, color: "text-purple-600", bg: "bg-purple-100", ext: "_organized.pdf" },
-    { title: "Page Numbers", desc: "Add page numbers to document", icon: Hash, color: "text-green-600", bg: "bg-green-100", ext: "_numbered.pdf" },
+    // Edit & Annotate
+    { title: "Edit PDF", desc: "Add text, images, and annotations", icon: PenTool, color: "text-blue-600", bg: "bg-blue-100", ext: "" },
+    { title: "Sign PDF", desc: "Add electronic signatures", icon: PenTool, color: "text-purple-600", bg: "bg-purple-100", ext: "" },
     { title: "Crop PDF", desc: "Trim margins and crop pages", icon: Crop, color: "text-orange-600", bg: "bg-orange-100", ext: "_cropped.pdf" },
-    { title: "Repair PDF", desc: "Fix corrupted or damaged files", icon: Wrench, color: "text-red-600", bg: "bg-red-100", ext: "_repaired.pdf" },
+    { title: "Page Numbers", desc: "Add page numbers to document", icon: Hash, color: "text-green-600", bg: "bg-green-100", ext: "_numbered.pdf" },
+    { title: "Add Watermark", desc: "Add text or image watermarks", icon: Type, color: "text-indigo-600", bg: "bg-indigo-100", ext: "_watermarked.pdf" },
+    { title: "Header & Footer", desc: "Add headers and footers", icon: LayoutGrid, color: "text-blue-600", bg: "bg-blue-100", ext: "_headerfooter.pdf" },
+    { title: "Invert Colors", desc: "Invert PDF colors for dark mode", icon: Palette, color: "text-gray-600", bg: "bg-gray-100", ext: "_inverted.pdf" },
+    { title: "Background Color", desc: "Change PDF background color", icon: Palette, color: "text-pink-600", bg: "bg-pink-100", ext: "_bg.pdf" },
+    { title: "Change Text Color", desc: "Modify color of text content", icon: Type, color: "text-blue-600", bg: "bg-blue-100", ext: "_textcolor.pdf" },
+    { title: "Add Stamps", desc: "Add approval stamps", icon: FileCheck, color: "text-green-600", bg: "bg-green-100", ext: "_stamped.pdf" },
+    { title: "Remove Annotations", desc: "Delete comments and markup", icon: Eraser, color: "text-red-600", bg: "bg-red-100", ext: "_clean.pdf" },
+    { title: "Form Filler", desc: "Fill PDF forms online", icon: FileText, color: "text-blue-600", bg: "bg-blue-100", ext: "" },
+    { title: "Form Creator", desc: "Create fillable PDF forms", icon: FileText, color: "text-indigo-600", bg: "bg-indigo-100", ext: "" },
+    { title: "Remove Blank Pages", desc: "Detect and remove empty pages", icon: File, color: "text-gray-500", bg: "bg-gray-100", ext: "_noblank.pdf" },
+    { title: "PDF Reader", desc: "View and navigate PDF documents", icon: Book, color: "text-blue-600", bg: "bg-blue-100", ext: "" },
+
+    // Convert to PDF
+    { title: "JPG to PDF", desc: "Convert JPG images to PDF", icon: Image, color: "text-purple-600", bg: "bg-purple-100", ext: ".pdf" },
+    { title: "PNG to PDF", desc: "Convert PNG images to PDF", icon: Image, color: "text-blue-600", bg: "bg-blue-100", ext: ".pdf" },
+    { title: "WebP to PDF", desc: "Convert WebP images to PDF", icon: Image, color: "text-green-600", bg: "bg-green-100", ext: ".pdf" },
+    { title: "BMP to PDF", desc: "Convert BMP images to PDF", icon: Image, color: "text-orange-600", bg: "bg-orange-100", ext: ".pdf" },
+    { title: "TIFF to PDF", desc: "Convert TIFF images to PDF", icon: Image, color: "text-red-600", bg: "bg-red-100", ext: ".pdf" },
+    { title: "Text to PDF", desc: "Convert plain text to PDF", icon: FileText, color: "text-gray-600", bg: "bg-gray-100", ext: ".pdf" },
+    { title: "Markdown to PDF", desc: "Convert Markdown to PDF", icon: FileCode, color: "text-slate-800", bg: "bg-slate-200", ext: ".pdf" },
+    { title: "Word to PDF", desc: "Convert Word documents to PDF", icon: FileText, color: "text-blue-600", bg: "bg-blue-100", ext: ".pdf" },
+    { title: "Excel to PDF", desc: "Convert Excel spreadsheets to PDF", icon: FileSpreadsheet, color: "text-green-600", bg: "bg-green-100", ext: ".pdf" },
+    { title: "PPT to PDF", desc: "Convert PowerPoint to PDF", icon: FileOutput, color: "text-orange-600", bg: "bg-orange-100", ext: ".pdf" },
+    { title: "HTML to PDF", desc: "Convert HTML files or content to PDF", icon: Globe, color: "text-pink-600", bg: "bg-pink-100", ext: ".pdf" },
+
+    // Convert from PDF
+    { title: "PDF to JPG", desc: "Convert PDF pages to JPG", icon: Image, color: "text-purple-600", bg: "bg-purple-100", ext: ".zip" },
+    { title: "PDF to PNG", desc: "Convert PDF pages to PNG", icon: Image, color: "text-blue-600", bg: "bg-blue-100", ext: ".zip" },
+    { title: "PDF to WebP", desc: "Convert PDF pages to WebP", icon: Image, color: "text-green-600", bg: "bg-green-100", ext: ".zip" },
+    { title: "PDF to BMP", desc: "Convert PDF pages to BMP", icon: Image, color: "text-orange-600", bg: "bg-orange-100", ext: ".zip" },
+    { title: "PDF to TIFF", desc: "Convert PDF to TIFF images", icon: Image, color: "text-red-600", bg: "bg-red-100", ext: ".zip" },
+    { title: "PDF to Text", desc: "Extract text from PDF", icon: FileText, color: "text-gray-600", bg: "bg-gray-100", ext: ".txt" },
+    { title: "PDF to JSON", desc: "Extract content to JSON", icon: FileCode, color: "text-yellow-600", bg: "bg-yellow-100", ext: ".json" },
     { title: "PDF to Word", desc: "Convert PDF files to Microsoft Word", icon: FileText, color: "text-blue-600", bg: "bg-blue-100", ext: ".docx" },
     { title: "PDF to Excel", desc: "Convert PDF files to Microsoft Excel", icon: FileSpreadsheet, color: "text-green-600", bg: "bg-green-100", ext: ".xlsx" },
     { title: "PDF to PPT", desc: "Convert PDF files to PowerPoint", icon: FileOutput, color: "text-orange-600", bg: "bg-orange-100", ext: ".pptx" },
-    { title: "PDF to Image", desc: "Convert pages to JPG, PNG or TIFF", icon: Image, color: "text-purple-600", bg: "bg-purple-100", ext: ".zip" },
-    { title: "Word to PDF", desc: "Convert Word documents to PDF", icon: FileText, color: "text-blue-600", bg: "bg-blue-100", ext: ".pdf" },
-    { title: "Excel to PDF", desc: "Convert Excel spreadsheets to PDF", icon: FileSpreadsheet, color: "text-green-600", bg: "bg-green-100", ext: ".pdf" },
-    { title: "PPT to PDF", desc: "Convert PowerPoint presentations to PDF", icon: FileOutput, color: "text-orange-600", bg: "bg-orange-100", ext: ".pdf" },
-    { title: "JPG to PDF", desc: "Convert Images to PDF", icon: Image, color: "text-purple-600", bg: "bg-purple-100", ext: ".pdf" },
-    { title: "HTML to PDF", desc: "Convert HTML files or content to PDF", icon: Globe, color: "text-pink-600", bg: "bg-pink-100", ext: ".pdf" },
+    { title: "PDF to Image", desc: "Convert pages to Images (General)", icon: Image, color: "text-purple-600", bg: "bg-purple-100", ext: ".zip" },
+
+    // Organize & Manage
     { title: "Merge PDF", desc: "Combine multiple PDFs into one", icon: Merge, color: "text-red-600", bg: "bg-red-100", ext: "_merged.pdf" },
     { title: "Split PDF", desc: "Separate one page or a whole set", icon: Split, color: "text-cyan-600", bg: "bg-cyan-100", ext: "_split.zip" },
+    { title: "Extract PDF Pages", desc: "Extract specific pages from PDF", icon: FileText, color: "text-cyan-600", bg: "bg-cyan-100", ext: "_extracted.pdf" },
+    { title: "Organize PDF", desc: "Sort and reorder pages", icon: ArrowLeftRight, color: "text-purple-600", bg: "bg-purple-100", ext: "_organized.pdf" },
+    { title: "Rotate PDF", desc: "Rotate pages left or right", icon: RotateCw, color: "text-blue-600", bg: "bg-blue-100", ext: "_rotated.pdf" },
+    { title: "Scan to PDF", desc: "Capture document scans from mobile", icon: Camera, color: "text-blue-600", bg: "bg-blue-100", ext: ".pdf" },
+    { title: "Compare PDF", desc: "Overlay and compare two PDF files", icon: Layers, color: "text-indigo-600", bg: "bg-indigo-100", ext: "" },
+    { title: "OCR", desc: "Make scanned documents searchable", icon: Eye, color: "text-yellow-600", bg: "bg-yellow-100", ext: "_ocr.pdf" },
+    { title: "View Metadata", desc: "View PDF document properties", icon: FileText, color: "text-gray-600", bg: "bg-gray-100", ext: "" },
+    { title: "Edit Metadata", desc: "Edit PDF document properties", icon: FileText, color: "text-blue-600", bg: "bg-blue-100", ext: "_metadata.pdf" },
+
+    // Optimize & Repair
     { title: "Compress PDF", desc: "Reduce file size while optimizing", icon: Scissors, color: "text-pink-600", bg: "bg-pink-100", ext: "_compressed.pdf" },
+    { title: "Repair PDF", desc: "Fix corrupted or damaged files", icon: Wrench, color: "text-red-600", bg: "bg-red-100", ext: "_repaired.pdf" },
+    { title: "Flatten PDF", desc: "Make your PDF uneditable", icon: Layers, color: "text-purple-600", bg: "bg-purple-100", ext: "_flattened.pdf" },
+    { title: "Validate PDF/A", desc: "Check compliance with ISO standards", icon: FileCheck, color: "text-emerald-600", bg: "bg-emerald-100", ext: "_report.txt" },
+
+    // Secure PDF
     { title: "Protect PDF", desc: "Encrypt your PDF with a password", icon: Lock, color: "text-indigo-600", bg: "bg-indigo-100", ext: "_protected.pdf" },
     { title: "Unlock PDF", desc: "Remove security from PDF files", icon: Unlock, color: "text-teal-600", bg: "bg-teal-100", ext: "_unlocked.pdf" },
     { title: "Redact", desc: "Permanently remove sensitive info", icon: Eraser, color: "text-gray-600", bg: "bg-gray-100", ext: "_redacted.pdf" },
-    { title: "OCR", desc: "Make scanned documents searchable", icon: Eye, color: "text-yellow-600", bg: "bg-yellow-100", ext: "_ocr.pdf" },
-    { title: "Validate PDF/A", desc: "Check compliance with ISO standards", icon: FileCheck, color: "text-emerald-600", bg: "bg-emerald-100", ext: "_report.txt" },
-    { title: "Extract PDF Pages", desc: "Extract specific pages from PDF", icon: FileText, color: "text-cyan-600", bg: "bg-cyan-100", ext: "_extracted.pdf" },
-    { title: "Flatten PDF", desc: "Make your PDF uneditable", icon: Layers, color: "text-purple-600", bg: "bg-purple-100", ext: "_flattened.pdf" },
-    { title: "Scan to PDF", desc: "Capture document scans from mobile", icon: Camera, color: "text-blue-600", bg: "bg-blue-100", ext: ".pdf" },
   ];
 
   const handleToolClick = (tool: any) => {
+    if (tool.title === "Edit PDF" && onNavigate) {
+       onNavigate(AppView.EDITOR);
+       return;
+    }
+    if (tool.title === "Sign PDF" && onNavigate) {
+       onNavigate(AppView.SIGN);
+       return;
+    }
+    if ((tool.title === "Form Filler" || tool.title === "Form Creator") && onNavigate) {
+       onNavigate(AppView.FORMS);
+       return;
+    }
+
     setActiveTool(tool);
     setStatus('idle');
     setFileName('');
@@ -260,7 +337,7 @@ export const ToolsGrid: React.FC = () => {
             setDownloadUrl(url);
             setStatus('success');
             setProgress(100);
-        } else if (activeTool.title === "JPG to PDF") {
+        } else if (activeTool.title === "JPG to PDF" || activeTool.title === "PNG to PDF" || activeTool.title === "WebP to PDF" || activeTool.title === "BMP to PDF" || activeTool.title === "TIFF to PDF") {
             const { convertImageToPDF } = await import('../services/conversionService');
             const blob = await convertImageToPDF(file);
             setResultBlob(blob);
@@ -268,6 +345,50 @@ export const ToolsGrid: React.FC = () => {
             setDownloadUrl(url);
             setStatus('success');
             setProgress(100);
+        } else if (activeTool.title === "Text to PDF") {
+            const { convertTextToPDF } = await import('../services/conversionService');
+            const blob = await convertTextToPDF(file);
+            setResultBlob(blob);
+            const url = URL.createObjectURL(blob);
+            setDownloadUrl(url);
+            setStatus('success');
+            setProgress(100);
+        } else if (activeTool.title === "Markdown to PDF") {
+            const { convertMarkdownToPDF } = await import('../services/conversionService');
+            const blob = await convertMarkdownToPDF(file);
+            setResultBlob(blob);
+            const url = URL.createObjectURL(blob);
+            setDownloadUrl(url);
+            setStatus('success');
+            setProgress(100);
+        } else if (activeTool.title === "PDF to Text") {
+             const { convertPDFToText } = await import('../services/conversionService');
+             const blob = await convertPDFToText(file);
+             setResultBlob(blob);
+             const url = URL.createObjectURL(blob);
+             setDownloadUrl(url);
+             setStatus('success');
+             setProgress(100);
+        } else if (activeTool.title === "PDF to JSON") {
+             const { convertPDFToJSON } = await import('../services/conversionService');
+             const blob = await convertPDFToJSON(file);
+             setResultBlob(blob);
+             const url = URL.createObjectURL(blob);
+             setDownloadUrl(url);
+             setStatus('success');
+             setProgress(100);
+        } else if (["PDF to JPG", "PDF to PNG", "PDF to WebP", "PDF to BMP", "PDF to TIFF"].includes(activeTool.title)) {
+             const { convertPdfToImages } = await import('../utils/pdfConverter');
+             let format: any = 'jpg';
+             if (activeTool.title === "PDF to PNG") format = 'png';
+             if (activeTool.title === "PDF to WebP") format = 'webp';
+             if (activeTool.title === "PDF to BMP") format = 'bmp';
+             if (activeTool.title === "PDF to TIFF") format = 'tiff';
+
+             const result = await convertPdfToImages(file, format, (p) => setProgress(p));
+             setConversionResult(result); // Using conversionResult triggers Zip download logic in handleDownload
+             setResultBlob(result);
+             setStatus('success');
         } else if (activeTool.title === "HTML to PDF") {
             // HTML File upload path
              const text = await file.text();
@@ -583,9 +704,15 @@ export const ToolsGrid: React.FC = () => {
         type="file" 
         accept={
             activeTool?.title === "JPG to PDF" ? "image/jpeg, image/jpg" :
+            activeTool?.title === "PNG to PDF" ? "image/png" :
+            activeTool?.title === "WebP to PDF" ? "image/webp" :
+            activeTool?.title === "BMP to PDF" ? "image/bmp" :
+            activeTool?.title === "TIFF to PDF" ? "image/tiff, .tiff, .tif" :
             activeTool?.title === "Word to PDF" ? ".docx, .doc" :
             activeTool?.title === "Excel to PDF" ? ".xlsx, .xls" :
             activeTool?.title === "PPT to PDF" ? ".pptx, .ppt" :
+            activeTool?.title === "Text to PDF" ? "text/plain, .txt" :
+            activeTool?.title === "Markdown to PDF" ? "text/markdown, .md, .markdown" :
             activeTool?.title === "HTML to PDF" ? ".html, .htm" :
             ".pdf"
         }
