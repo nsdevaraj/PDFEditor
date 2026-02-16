@@ -87,6 +87,12 @@ export const ToolsGrid: React.FC<ToolsGridProps> = ({ onNavigate }) => {
   const [errorMessage, setErrorMessage] = useState('');
   const [fileBuffer, setFileBuffer] = useState<ArrayBuffer | null>(null);
   const [htmlContent, setHtmlContent] = useState('');
+  const [watermarkText, setWatermarkText] = useState('CONFIDENTIAL');
+  const [headerText, setHeaderText] = useState('');
+  const [footerText, setFooterText] = useState('');
+  const [headerFooterFontSize, setHeaderFooterFontSize] = useState(12);
+  const [bgColor, setBgColor] = useState('#FFFDE7');
+  const [textColor, setTextColor] = useState('#FF0000');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -204,6 +210,242 @@ export const ToolsGrid: React.FC<ToolsGridProps> = ({ onNavigate }) => {
     }, 50);
   };
 
+  const handleWatermark = async () => {
+    if (!selectedFile) return;
+    setStatus('processing');
+    setProgress(10);
+
+    try {
+      const { PDFDocument, rgb, degrees, StandardFonts } = await import('pdf-lib');
+      const arrayBuffer = await selectedFile.arrayBuffer();
+      const pdfDoc = await PDFDocument.load(arrayBuffer);
+      const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+      const pages = pdfDoc.getPages();
+      const text = watermarkText || 'WATERMARK';
+
+      for (let i = 0; i < pages.length; i++) {
+        const page = pages[i];
+        const { width, height } = page.getSize();
+        const fontSize = Math.min(width, height) / 8;
+        const textWidth = font.widthOfTextAtSize(text, fontSize);
+        const textHeight = font.heightAtSize(fontSize);
+
+        page.drawText(text, {
+          x: width / 2 - textWidth / 2,
+          y: height / 2 - textHeight / 2,
+          size: fontSize,
+          font: font,
+          color: rgb(0.75, 0.75, 0.75),
+          rotate: degrees(-45),
+          opacity: 0.3,
+        });
+
+        setProgress(10 + ((i + 1) / pages.length) * 85);
+      }
+
+      const savedBytes = await pdfDoc.save();
+      const blob = new Blob([savedBytes], { type: 'application/pdf' });
+      setResultBlob(blob);
+      const url = URL.createObjectURL(blob);
+      setDownloadUrl(url);
+      setStatus('success');
+      setProgress(100);
+    } catch (error) {
+      console.error('Watermark failed:', error);
+      setStatus('idle');
+      alert('Watermark operation failed. Please try again.');
+    }
+  };
+
+  const handleHeaderFooter = async () => {
+    if (!selectedFile || (!headerText && !footerText)) return;
+    setStatus('processing');
+    setProgress(10);
+
+    try {
+      const { PDFDocument, rgb, StandardFonts } = await import('pdf-lib');
+      const arrayBuffer = await selectedFile.arrayBuffer();
+      const pdfDoc = await PDFDocument.load(arrayBuffer);
+      const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+      const pages = pdfDoc.getPages();
+
+      for (let i = 0; i < pages.length; i++) {
+        const page = pages[i];
+        const { width, height } = page.getSize();
+
+        if (headerText) {
+          const textWidth = font.widthOfTextAtSize(headerText, headerFooterFontSize);
+          page.drawText(headerText, {
+            x: (width - textWidth) / 2,
+            y: height - headerFooterFontSize - 15,
+            size: headerFooterFontSize,
+            font,
+            color: rgb(0.2, 0.2, 0.2),
+          });
+        }
+
+        if (footerText) {
+          const textWidth = font.widthOfTextAtSize(footerText, headerFooterFontSize);
+          page.drawText(footerText, {
+            x: (width - textWidth) / 2,
+            y: 15,
+            size: headerFooterFontSize,
+            font,
+            color: rgb(0.2, 0.2, 0.2),
+          });
+        }
+
+        setProgress(10 + ((i + 1) / pages.length) * 85);
+      }
+
+      const savedBytes = await pdfDoc.save();
+      const blob = new Blob([savedBytes], { type: 'application/pdf' });
+      setResultBlob(blob);
+      const url = URL.createObjectURL(blob);
+      setDownloadUrl(url);
+      setStatus('success');
+      setProgress(100);
+    } catch (error) {
+      console.error('Header & Footer failed:', error);
+      setStatus('idle');
+      alert('Header & Footer operation failed. Please try again.');
+    }
+  };
+
+  const handleInvertColors = async () => {
+    if (!selectedFile) return;
+    setStatus('processing');
+    setProgress(10);
+
+    try {
+      const { PDFDocument, rgb } = await import('pdf-lib');
+      const arrayBuffer = await selectedFile.arrayBuffer();
+      const pdfDoc = await PDFDocument.load(arrayBuffer);
+      const pages = pdfDoc.getPages();
+
+      for (let i = 0; i < pages.length; i++) {
+        const page = pages[i];
+        const { width, height } = page.getSize();
+        // Draw a dark rectangle over the entire page with blendMode
+        page.drawRectangle({
+          x: 0,
+          y: 0,
+          width,
+          height,
+          color: rgb(0.12, 0.12, 0.15),
+          opacity: 0.88,
+        });
+        setProgress(10 + ((i + 1) / pages.length) * 85);
+      }
+
+      const savedBytes = await pdfDoc.save();
+      const blob = new Blob([savedBytes], { type: 'application/pdf' });
+      setResultBlob(blob);
+      const url = URL.createObjectURL(blob);
+      setDownloadUrl(url);
+      setStatus('success');
+      setProgress(100);
+    } catch (error) {
+      console.error('Invert Colors failed:', error);
+      setStatus('idle');
+      alert('Invert Colors operation failed. Please try again.');
+    }
+  };
+
+  const handleBackgroundColor = async () => {
+    if (!selectedFile) return;
+    setStatus('processing');
+    setProgress(10);
+
+    try {
+      const { PDFDocument, rgb } = await import('pdf-lib');
+      const arrayBuffer = await selectedFile.arrayBuffer();
+      const pdfDoc = await PDFDocument.load(arrayBuffer);
+      const pages = pdfDoc.getPages();
+
+      const r = parseInt(bgColor.slice(1, 3), 16) / 255;
+      const g = parseInt(bgColor.slice(3, 5), 16) / 255;
+      const b = parseInt(bgColor.slice(5, 7), 16) / 255;
+
+      for (let i = 0; i < pages.length; i++) {
+        const page = pages[i];
+        const { width, height } = page.getSize();
+        // Draw background rectangle on the page
+        page.drawRectangle({
+          x: 0,
+          y: 0,
+          width,
+          height,
+          color: rgb(r, g, b),
+          opacity: 1,
+        });
+        setProgress(10 + ((i + 1) / pages.length) * 85);
+      }
+
+      const savedBytes = await pdfDoc.save();
+      const blob = new Blob([savedBytes], { type: 'application/pdf' });
+      setResultBlob(blob);
+      const url = URL.createObjectURL(blob);
+      setDownloadUrl(url);
+      setStatus('success');
+      setProgress(100);
+    } catch (error) {
+      console.error('Background Color failed:', error);
+      setStatus('idle');
+      alert('Background Color operation failed. Please try again.');
+    }
+  };
+
+  const handleTextColor = async () => {
+    if (!selectedFile) return;
+    setStatus('processing');
+    setProgress(10);
+
+    try {
+      const { PDFDocument, PDFName, PDFArray } = await import('pdf-lib');
+      const arrayBuffer = await selectedFile.arrayBuffer();
+      const pdfDoc = await PDFDocument.load(arrayBuffer);
+      const pages = pdfDoc.getPages();
+
+      const r = parseInt(textColor.slice(1, 3), 16) / 255;
+      const g = parseInt(textColor.slice(3, 5), 16) / 255;
+      const b = parseInt(textColor.slice(5, 7), 16) / 255;
+
+      const contentsKey = PDFName.of('Contents');
+      const encoder = new TextEncoder();
+      const colorCmd = `${r.toFixed(3)} ${g.toFixed(3)} ${b.toFixed(3)} rg\n${r.toFixed(3)} ${g.toFixed(3)} ${b.toFixed(3)} RG\n`;
+      const colorStream = encoder.encode(colorCmd);
+
+      for (let i = 0; i < pages.length; i++) {
+        const page = pages[i];
+        const ref = pdfDoc.context.register(pdfDoc.context.stream(colorStream));
+        const contentsRef = page.node.get(contentsKey);
+        if (contentsRef) {
+          const existingArray = page.node.lookup(contentsKey);
+          if (existingArray instanceof PDFArray) {
+            existingArray.insert(0, ref);
+          } else {
+            const newArray = pdfDoc.context.obj([ref, contentsRef]);
+            page.node.set(contentsKey, newArray);
+          }
+        }
+        setProgress(10 + ((i + 1) / pages.length) * 85);
+      }
+
+      const savedBytes = await pdfDoc.save();
+      const blob = new Blob([savedBytes], { type: 'application/pdf' });
+      setResultBlob(blob);
+      const url = URL.createObjectURL(blob);
+      setDownloadUrl(url);
+      setStatus('success');
+      setProgress(100);
+    } catch (error) {
+      console.error('Change Text Color failed:', error);
+      setStatus('idle');
+      alert('Change Text Color operation failed. Please try again.');
+    }
+  };
+
   const handleHtmlConvert = async () => {
       if (!htmlContent) return;
       setStatus('processing');
@@ -254,6 +496,16 @@ export const ToolsGrid: React.FC<ToolsGridProps> = ({ onNavigate }) => {
         }
 
       if (activeTool && activeTool.title === "PDF to Image") {
+        setStatus('configuring');
+        return;
+      }
+
+      if (activeTool && activeTool.title === "Add Watermark") {
+        setStatus('configuring');
+        return;
+      }
+
+      if (activeTool && ['Header & Footer', 'Invert Colors', 'Background Color', 'Change Text Color'].includes(activeTool.title)) {
         setStatus('configuring');
         return;
       }
@@ -560,6 +812,12 @@ export const ToolsGrid: React.FC<ToolsGridProps> = ({ onNavigate }) => {
     setProcessedFileUrl(null);
     setValidationResult(null);
     setHtmlContent('');
+    setWatermarkText('CONFIDENTIAL');
+    setHeaderText('');
+    setFooterText('');
+    setHeaderFooterFontSize(12);
+    setBgColor('#FFFDE7');
+    setTextColor('#FF0000');
   };
 
   const handleDownload = () => {
@@ -830,7 +1088,208 @@ export const ToolsGrid: React.FC<ToolsGridProps> = ({ onNavigate }) => {
                   </div>
                 )}
 
-                {status === 'configuring' && (
+                {status === 'configuring' && activeTool?.title === 'Add Watermark' && (
+                  <div className="text-center py-6">
+                    <div className="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Type className="w-8 h-8 text-indigo-600" />
+                    </div>
+                    <h4 className="text-xl font-bold text-slate-900 mb-2">Add Watermark</h4>
+                    <p className="text-slate-500 mb-6">Enter the watermark text for your PDF</p>
+
+                    <div className="mb-6">
+                      <input
+                        type="text"
+                        value={watermarkText}
+                        onChange={(e) => setWatermarkText(e.target.value)}
+                        placeholder="Enter watermark text"
+                        className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                        autoFocus
+                      />
+                    </div>
+
+                    <button
+                      onClick={handleWatermark}
+                      disabled={!watermarkText.trim()}
+                      className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white py-3 rounded-xl font-medium transition-colors"
+                    >
+                      Apply Watermark
+                    </button>
+                  </div>
+                )}
+
+                {status === 'configuring' && activeTool?.title === 'Header & Footer' && (
+                  <div className="text-center py-6">
+                    <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <LayoutGrid className="w-8 h-8 text-blue-600" />
+                    </div>
+                    <h4 className="text-xl font-bold text-slate-900 mb-2">Header & Footer</h4>
+                    <p className="text-slate-500 mb-6">Add headers and footers to every page</p>
+
+                    <div className="space-y-4 text-left mb-6">
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Header Text</label>
+                        <input
+                          type="text"
+                          value={headerText}
+                          onChange={(e) => setHeaderText(e.target.value)}
+                          placeholder="e.g. Company Name"
+                          className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                          autoFocus
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Footer Text</label>
+                        <input
+                          type="text"
+                          value={footerText}
+                          onChange={(e) => setFooterText(e.target.value)}
+                          placeholder="e.g. Confidential"
+                          className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Font Size: {headerFooterFontSize}pt</label>
+                        <input
+                          type="range"
+                          min="8"
+                          max="24"
+                          value={headerFooterFontSize}
+                          onChange={(e) => setHeaderFooterFontSize(Number(e.target.value))}
+                          className="w-full accent-blue-600"
+                        />
+                        <div className="flex justify-between text-xs text-slate-400 mt-1">
+                          <span>8pt</span>
+                          <span>24pt</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={handleHeaderFooter}
+                      disabled={!headerText.trim() && !footerText.trim()}
+                      className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white py-3 rounded-xl font-medium transition-colors"
+                    >
+                      Apply Header & Footer
+                    </button>
+                  </div>
+                )}
+
+                {status === 'configuring' && activeTool?.title === 'Invert Colors' && (
+                  <div className="text-center py-6">
+                    <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Palette className="w-8 h-8 text-gray-600" />
+                    </div>
+                    <h4 className="text-xl font-bold text-slate-900 mb-2">Invert Colors</h4>
+                    <p className="text-slate-500 mb-4">Apply a dark overlay to create a dark-mode version of your PDF.</p>
+
+                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-6">
+                      <div className="flex items-center space-x-4 justify-center">
+                        <div className="w-16 h-20 bg-white border border-slate-200 rounded-lg flex items-center justify-center">
+                          <span className="text-xs text-slate-400">Before</span>
+                        </div>
+                        <ArrowRight className="w-5 h-5 text-slate-400" />
+                        <div className="w-16 h-20 bg-slate-800 border border-slate-700 rounded-lg flex items-center justify-center">
+                          <span className="text-xs text-slate-300">After</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={handleInvertColors}
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-medium transition-colors"
+                    >
+                      Invert Colors
+                    </button>
+                  </div>
+                )}
+
+                {status === 'configuring' && activeTool?.title === 'Background Color' && (
+                  <div className="text-center py-6">
+                    <div className="w-16 h-16 bg-pink-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Palette className="w-8 h-8 text-pink-600" />
+                    </div>
+                    <h4 className="text-xl font-bold text-slate-900 mb-2">Background Color</h4>
+                    <p className="text-slate-500 mb-6">Choose a background color for all pages</p>
+
+                    <div className="space-y-4 mb-6">
+                      <div className="flex items-center justify-center space-x-4">
+                        <input
+                          type="color"
+                          value={bgColor}
+                          onChange={(e) => setBgColor(e.target.value)}
+                          className="w-16 h-16 rounded-xl border-2 border-slate-200 cursor-pointer"
+                        />
+                        <div className="text-left">
+                          <p className="text-sm font-medium text-slate-700">Selected Color</p>
+                          <p className="text-sm text-slate-500 font-mono">{bgColor}</p>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap justify-center gap-2">
+                        {['#FFFDE7', '#FFF3E0', '#E3F2FD', '#E8F5E9', '#F3E5F5', '#FAFAFA', '#FFEBEE', '#E0F7FA'].map((c) => (
+                          <button
+                            key={c}
+                            onClick={() => setBgColor(c)}
+                            className={`w-10 h-10 rounded-lg border-2 transition-all ${bgColor === c ? 'border-blue-600 scale-110' : 'border-slate-200 hover:border-slate-400'}`}
+                            style={{ backgroundColor: c }}
+                            title={c}
+                          />
+                        ))}
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={handleBackgroundColor}
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-medium transition-colors"
+                    >
+                      Apply Background Color
+                    </button>
+                  </div>
+                )}
+
+                {status === 'configuring' && activeTool?.title === 'Change Text Color' && (
+                  <div className="text-center py-6">
+                    <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Type className="w-8 h-8 text-blue-600" />
+                    </div>
+                    <h4 className="text-xl font-bold text-slate-900 mb-2">Change Text Color</h4>
+                    <p className="text-slate-500 mb-6">Pick a new color for your PDF text</p>
+
+                    <div className="space-y-4 mb-6">
+                      <div className="flex items-center justify-center space-x-4">
+                        <input
+                          type="color"
+                          value={textColor}
+                          onChange={(e) => setTextColor(e.target.value)}
+                          className="w-16 h-16 rounded-xl border-2 border-slate-200 cursor-pointer"
+                        />
+                        <div className="text-left">
+                          <p className="text-sm font-medium text-slate-700">Selected Color</p>
+                          <p className="text-sm font-mono" style={{ color: textColor }}>{textColor}</p>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap justify-center gap-2">
+                        {['#FF0000', '#0000FF', '#008000', '#FF6600', '#800080', '#000000', '#333333', '#1E3A5F'].map((c) => (
+                          <button
+                            key={c}
+                            onClick={() => setTextColor(c)}
+                            className={`w-10 h-10 rounded-lg border-2 transition-all ${textColor === c ? 'border-blue-600 scale-110' : 'border-slate-200 hover:border-slate-400'}`}
+                            style={{ backgroundColor: c }}
+                            title={c}
+                          />
+                        ))}
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={handleTextColor}
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-medium transition-colors"
+                    >
+                      Apply Text Color
+                    </button>
+                  </div>
+                )}
+
+                {status === 'configuring' && !['Add Watermark', 'Header & Footer', 'Invert Colors', 'Background Color', 'Change Text Color'].includes(activeTool?.title) && (
                   <div className="text-center py-6">
                     <h4 className="font-semibold text-slate-900 mb-4">Select Output Format</h4>
 
