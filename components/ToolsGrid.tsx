@@ -318,7 +318,7 @@ export const ToolsGrid: React.FC<ToolsGridProps> = ({ onNavigate }) => {
     setProgress(10);
 
     try {
-      const { PDFDocument, rgb } = await import('pdf-lib');
+      const { PDFDocument, rgb, BlendMode } = await import('pdf-lib');
       const arrayBuffer = await selectedFile.arrayBuffer();
       const pdfDoc = await PDFDocument.load(arrayBuffer);
       const pages = pdfDoc.getPages();
@@ -326,14 +326,15 @@ export const ToolsGrid: React.FC<ToolsGridProps> = ({ onNavigate }) => {
       for (let i = 0; i < pages.length; i++) {
         const page = pages[i];
         const { width, height } = page.getSize();
-        // Draw a dark rectangle over the entire page with blendMode
+        // Draw a white rectangle with Difference blend mode to invert underlying colors
         page.drawRectangle({
           x: 0,
           y: 0,
           width,
           height,
-          color: rgb(0.12, 0.12, 0.15),
-          opacity: 0.88,
+          color: rgb(1, 1, 1),
+          blendMode: BlendMode.Difference,
+          opacity: 1,
         });
         setProgress(10 + ((i + 1) / pages.length) * 85);
       }
@@ -358,7 +359,7 @@ export const ToolsGrid: React.FC<ToolsGridProps> = ({ onNavigate }) => {
     setProgress(10);
 
     try {
-      const { PDFDocument, rgb } = await import('pdf-lib');
+      const { PDFDocument, rgb, PDFName, PDFArray } = await import('pdf-lib');
       const arrayBuffer = await selectedFile.arrayBuffer();
       const pdfDoc = await PDFDocument.load(arrayBuffer);
       const pages = pdfDoc.getPages();
@@ -370,7 +371,8 @@ export const ToolsGrid: React.FC<ToolsGridProps> = ({ onNavigate }) => {
       for (let i = 0; i < pages.length; i++) {
         const page = pages[i];
         const { width, height } = page.getSize();
-        // Draw background rectangle on the page
+
+        // Draw background rectangle (initially on top)
         page.drawRectangle({
           x: 0,
           y: 0,
@@ -379,6 +381,16 @@ export const ToolsGrid: React.FC<ToolsGridProps> = ({ onNavigate }) => {
           color: rgb(r, g, b),
           opacity: 1,
         });
+
+        // Move the drawn rectangle to the background (beginning of content stream)
+        const contents = page.node.lookup(PDFName.of('Contents'));
+        if (contents instanceof PDFArray) {
+          const lastIndex = contents.size() - 1;
+          const last = contents.get(lastIndex);
+          contents.remove(lastIndex);
+          contents.insert(0, last);
+        }
+
         setProgress(10 + ((i + 1) / pages.length) * 85);
       }
 
