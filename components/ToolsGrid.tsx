@@ -77,6 +77,8 @@ export const ToolsGrid: React.FC<ToolsGridProps> = ({ onNavigate }) => {
   const [resultBlob, setResultBlob] = useState<Blob | null>(null);
   const [currentFile, setCurrentFile] = useState<UploadedFile | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [stampImage, setStampImage] = useState<File | null>(null);
     
   const [processedFile, setProcessedFile] = useState<Blob | null>(null);
   const [processedFileUrl, setProcessedFileUrl] = useState<string | null>(null);
@@ -318,7 +320,7 @@ export const ToolsGrid: React.FC<ToolsGridProps> = ({ onNavigate }) => {
     setProgress(10);
 
     try {
-      const { PDFDocument, rgb } = await import('pdf-lib');
+      const { PDFDocument, rgb, BlendMode } = await import('pdf-lib');
       const arrayBuffer = await selectedFile.arrayBuffer();
       const pdfDoc = await PDFDocument.load(arrayBuffer);
       const pages = pdfDoc.getPages();
@@ -326,14 +328,15 @@ export const ToolsGrid: React.FC<ToolsGridProps> = ({ onNavigate }) => {
       for (let i = 0; i < pages.length; i++) {
         const page = pages[i];
         const { width, height } = page.getSize();
-        // Draw a dark rectangle over the entire page with blendMode
+        // Draw a white rectangle with Difference blend mode to invert underlying colors
         page.drawRectangle({
           x: 0,
           y: 0,
           width,
           height,
-          color: rgb(0.12, 0.12, 0.15),
-          opacity: 0.88,
+          color: rgb(1, 1, 1),
+          blendMode: BlendMode.Difference,
+          opacity: 1,
         });
         setProgress(10 + ((i + 1) / pages.length) * 85);
       }
@@ -358,7 +361,7 @@ export const ToolsGrid: React.FC<ToolsGridProps> = ({ onNavigate }) => {
     setProgress(10);
 
     try {
-      const { PDFDocument, rgb } = await import('pdf-lib');
+      const { PDFDocument, rgb, PDFName, PDFArray } = await import('pdf-lib');
       const arrayBuffer = await selectedFile.arrayBuffer();
       const pdfDoc = await PDFDocument.load(arrayBuffer);
       const pages = pdfDoc.getPages();
@@ -370,7 +373,8 @@ export const ToolsGrid: React.FC<ToolsGridProps> = ({ onNavigate }) => {
       for (let i = 0; i < pages.length; i++) {
         const page = pages[i];
         const { width, height } = page.getSize();
-        // Draw background rectangle on the page
+
+        // Draw background rectangle (initially on top)
         page.drawRectangle({
           x: 0,
           y: 0,
@@ -379,6 +383,16 @@ export const ToolsGrid: React.FC<ToolsGridProps> = ({ onNavigate }) => {
           color: rgb(r, g, b),
           opacity: 1,
         });
+
+        // Move the drawn rectangle to the background (beginning of content stream)
+        const contents = page.node.lookup(PDFName.of('Contents'));
+        if (contents instanceof PDFArray) {
+          const lastIndex = contents.size() - 1;
+          const last = contents.get(lastIndex);
+          contents.remove(lastIndex);
+          contents.insert(0, last);
+        }
+
         setProgress(10 + ((i + 1) / pages.length) * 85);
       }
 
@@ -402,7 +416,7 @@ export const ToolsGrid: React.FC<ToolsGridProps> = ({ onNavigate }) => {
     setProgress(10);
 
     try {
-      const { PDFDocument, PDFName, PDFArray } = await import('pdf-lib');
+      const { PDFDocument, rgb, BlendMode } = await import('pdf-lib');
       const arrayBuffer = await selectedFile.arrayBuffer();
       const pdfDoc = await PDFDocument.load(arrayBuffer);
       const pages = pdfDoc.getPages();
@@ -411,24 +425,23 @@ export const ToolsGrid: React.FC<ToolsGridProps> = ({ onNavigate }) => {
       const g = parseInt(textColor.slice(3, 5), 16) / 255;
       const b = parseInt(textColor.slice(5, 7), 16) / 255;
 
-      const contentsKey = PDFName.of('Contents');
-      const encoder = new TextEncoder();
-      const colorCmd = `${r.toFixed(3)} ${g.toFixed(3)} ${b.toFixed(3)} rg\n${r.toFixed(3)} ${g.toFixed(3)} ${b.toFixed(3)} RG\n`;
-      const colorStream = encoder.encode(colorCmd);
-
       for (let i = 0; i < pages.length; i++) {
         const page = pages[i];
-        const ref = pdfDoc.context.register(pdfDoc.context.stream(colorStream));
-        const contentsRef = page.node.get(contentsKey);
-        if (contentsRef) {
-          const existingArray = page.node.lookup(contentsKey);
-          if (existingArray instanceof PDFArray) {
-            existingArray.insert(0, ref);
-          } else {
-            const newArray = pdfDoc.context.obj([ref, contentsRef]);
-            page.node.set(contentsKey, newArray);
-          }
-        }
+        const { width, height } = page.getSize();
+
+        // Draw a rectangle with Screen blend mode
+        // If text is black (0,0,0), Screen with Color (R,G,B) -> (R,G,B).
+        // If background is white (1,1,1), Screen with Color (R,G,B) -> (1,1,1).
+        page.drawRectangle({
+          x: 0,
+          y: 0,
+          width,
+          height,
+          color: rgb(r, g, b),
+          blendMode: BlendMode.Screen,
+          opacity: 1,
+        });
+
         setProgress(10 + ((i + 1) / pages.length) * 85);
       }
 
@@ -444,6 +457,168 @@ export const ToolsGrid: React.FC<ToolsGridProps> = ({ onNavigate }) => {
       setStatus('idle');
       alert('Change Text Color operation failed. Please try again.');
     }
+  };
+
+  const handleStamp = async () => {
+      if (!selectedFile || !stampImage) return;
+      setStatus('processing');
+      setProgress(10);
+      try {
+          const { PDFDocument } = await import('pdf-lib');
+          const pdfBytes = await selectedFile.arrayBuffer();
+          const pdfDoc = await PDFDocument.load(pdfBytes);
+
+          const imageBytes = await stampImage.arrayBuffer();
+          let image;
+          if (stampImage.type === 'image/png') {
+              image = await pdfDoc.embedPng(imageBytes);
+          } else {
+              image = await pdfDoc.embedJpg(imageBytes);
+          }
+
+          const pages = pdfDoc.getPages();
+          const { width, height } = image.scale(0.5); // Default scale
+
+          for (let i = 0; i < pages.length; i++) {
+              const page = pages[i];
+              const { width: pageWidth } = page.getSize();
+              // Draw at bottom right
+              page.drawImage(image, {
+                  x: pageWidth - width - 20,
+                  y: 20,
+                  width: width,
+                  height: height,
+              });
+              setProgress(10 + ((i + 1) / pages.length) * 85);
+          }
+
+          const savedBytes = await pdfDoc.save();
+          const blob = new Blob([savedBytes], { type: 'application/pdf' });
+          setResultBlob(blob);
+          const url = URL.createObjectURL(blob);
+          setDownloadUrl(url);
+          setStatus('success');
+          setProgress(100);
+      } catch (error) {
+          console.error('Stamp failed:', error);
+          setStatus('idle');
+          alert('Stamp operation failed.');
+      }
+  };
+
+  const handleMerge = async (files: File[]) => {
+      setStatus('processing');
+      setProgress(10);
+      try {
+          const { PDFDocument } = await import('pdf-lib');
+          const mergedPdf = await PDFDocument.create();
+
+          for (let i = 0; i < files.length; i++) {
+              const file = files[i];
+              const arrayBuffer = await file.arrayBuffer();
+              const pdf = await PDFDocument.load(arrayBuffer);
+              const copiedPages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
+              copiedPages.forEach((page) => mergedPdf.addPage(page));
+              setProgress(10 + ((i + 1) / files.length) * 85);
+          }
+
+          const savedBytes = await mergedPdf.save();
+          const blob = new Blob([savedBytes], { type: 'application/pdf' });
+          setResultBlob(blob);
+          const url = URL.createObjectURL(blob);
+          setDownloadUrl(url);
+          setStatus('success');
+          setProgress(100);
+      } catch (error) {
+          console.error('Merge failed:', error);
+          setStatus('idle');
+          alert('Merge operation failed.');
+      }
+  };
+
+  const handleRemoveAnnotations = async (file?: File) => {
+      const targetFile = file || selectedFile;
+      if (!targetFile) return;
+      setStatus('processing');
+      setProgress(10);
+      try {
+          const { PDFDocument, PDFName } = await import('pdf-lib');
+          const pdfBytes = await targetFile.arrayBuffer();
+          const pdfDoc = await PDFDocument.load(pdfBytes);
+          const pages = pdfDoc.getPages();
+
+          for (let i = 0; i < pages.length; i++) {
+              const page = pages[i];
+              page.node.delete(PDFName.of('Annots'));
+              setProgress(10 + ((i + 1) / pages.length) * 85);
+          }
+
+          const savedBytes = await pdfDoc.save();
+          const blob = new Blob([savedBytes], { type: 'application/pdf' });
+          setResultBlob(blob);
+          const url = URL.createObjectURL(blob);
+          setDownloadUrl(url);
+          setStatus('success');
+          setProgress(100);
+      } catch (error) {
+           console.error('Remove Annotations failed:', error);
+           setStatus('idle');
+           alert('Remove Annotations failed.');
+      }
+  };
+
+  const handleRemoveBlankPages = async (file?: File) => {
+      const targetFile = file || selectedFile;
+      if (!targetFile) return;
+      setStatus('processing');
+      setProgress(10);
+      try {
+          // Use pdfjs-dist to detect content
+          const pdfjsLib = await import('pdfjs-dist');
+          if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+             pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+                'pdfjs-dist/build/pdf.worker.min.mjs',
+                import.meta.url
+             ).toString();
+          }
+
+          const arrayBuffer = await targetFile.arrayBuffer();
+          const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
+          const pagesToKeep: number[] = [];
+
+          for (let i = 1; i <= pdf.numPages; i++) {
+              const page = await pdf.getPage(i);
+              const textContent = await page.getTextContent();
+              // Simple heuristic: if text items > 0, keep.
+              if (textContent.items.length > 0) {
+                  pagesToKeep.push(i - 1); // 0-based for pdf-lib
+              }
+              setProgress((i / pdf.numPages) * 50);
+          }
+
+          if (pagesToKeep.length === 0) {
+              throw new Error("All pages are blank!");
+          }
+
+          // Use pdf-lib to construct new doc
+          const { PDFDocument } = await import('pdf-lib');
+          const pdfDoc = await PDFDocument.load(arrayBuffer);
+          const newPdf = await PDFDocument.create();
+          const copiedPages = await newPdf.copyPages(pdfDoc, pagesToKeep);
+          copiedPages.forEach(p => newPdf.addPage(p));
+
+          const savedBytes = await newPdf.save();
+          const blob = new Blob([savedBytes], { type: 'application/pdf' });
+          setResultBlob(blob);
+          const url = URL.createObjectURL(blob);
+          setDownloadUrl(url);
+          setStatus('success');
+          setProgress(100);
+      } catch (error) {
+           console.error('Remove Blank Pages failed:', error);
+           setStatus('idle');
+           alert('Remove Blank Pages failed.');
+      }
   };
 
   const handleHtmlConvert = async () => {
@@ -467,7 +642,17 @@ export const ToolsGrid: React.FC<ToolsGridProps> = ({ onNavigate }) => {
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
+    if (e.target.files && e.target.files.length > 0) {
+      if (activeTool?.title === "Merge PDF" && e.target.files.length > 1) {
+          const files = Array.from(e.target.files);
+          setSelectedFiles(files);
+          setFileName(`${files.length} files`);
+          // Reset input
+          e.target.value = '';
+          handleMerge(files);
+          return;
+      }
+
       const file = e.target.files[0];
       setFileName(file.name);
       setSelectedFile(file);
@@ -505,9 +690,24 @@ export const ToolsGrid: React.FC<ToolsGridProps> = ({ onNavigate }) => {
         return;
       }
 
+      if (activeTool && activeTool.title === "Add Stamps") {
+        setStatus('configuring');
+        return;
+      }
+
       if (activeTool && ['Header & Footer', 'Invert Colors', 'Background Color', 'Change Text Color'].includes(activeTool.title)) {
         setStatus('configuring');
         return;
+      }
+
+      if (activeTool && activeTool.title === "Remove Annotations") {
+          handleRemoveAnnotations(file);
+          return;
+      }
+
+      if (activeTool && activeTool.title === "Remove Blank Pages") {
+          handleRemoveBlankPages(file);
+          return;
       }
 
       if (activeTool?.title === "Unlock PDF") {
@@ -960,6 +1160,7 @@ export const ToolsGrid: React.FC<ToolsGridProps> = ({ onNavigate }) => {
 
       <input 
         type="file" 
+        multiple={activeTool?.title === "Merge PDF"}
         accept={
             activeTool?.title === "JPG to PDF" ? "image/jpeg, image/jpg" :
             activeTool?.title === "PNG to PDF" ? "image/png" :
@@ -1084,6 +1285,42 @@ export const ToolsGrid: React.FC<ToolsGridProps> = ({ onNavigate }) => {
                       className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white py-3 rounded-xl font-medium transition-colors"
                     >
                       Encrypt PDF
+                    </button>
+                  </div>
+                )}
+
+                {status === 'configuring' && activeTool?.title === 'Add Stamps' && (
+                  <div className="text-center py-6">
+                    <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <FileCheck className="w-8 h-8 text-green-600" />
+                    </div>
+                    <h4 className="text-xl font-bold text-slate-900 mb-2">Add Stamp</h4>
+                    <p className="text-slate-500 mb-6">Upload an image to stamp on your PDF</p>
+
+                    <div className="mb-6">
+                      <input
+                        type="file"
+                        accept="image/png, image/jpeg"
+                        onChange={(e) => {
+                            if (e.target.files && e.target.files[0]) {
+                                setStampImage(e.target.files[0]);
+                            }
+                        }}
+                        className="block w-full text-sm text-slate-500
+                          file:mr-4 file:py-2 file:px-4
+                          file:rounded-full file:border-0
+                          file:text-sm file:font-semibold
+                          file:bg-blue-50 file:text-blue-700
+                          hover:file:bg-blue-100"
+                      />
+                    </div>
+
+                    <button
+                      onClick={handleStamp}
+                      disabled={!stampImage}
+                      className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white py-3 rounded-xl font-medium transition-colors"
+                    >
+                      Apply Stamp
                     </button>
                   </div>
                 )}

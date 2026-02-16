@@ -112,6 +112,18 @@ export const convertPdfToImages = async (
                        (canvas as HTMLCanvasElement).toBlob((b) => resolve(b), mimeType, 0.9);
                      });
                  }
+
+                 // Fallback for BMP if browser returns null (unsupported)
+                 if (!blob && format === 'bmp') {
+                     mimeType = 'image/png'; // Fallback to PNG encoding
+                      if (useOffscreen && canvas instanceof OffscreenCanvas) {
+                         blob = await canvas.convertToBlob({ type: mimeType, quality: 0.9 });
+                     } else {
+                         blob = await new Promise<Blob | null>((resolve) => {
+                           (canvas as HTMLCanvasElement).toBlob((b) => resolve(b), mimeType, 0.9);
+                         });
+                     }
+                 }
              }
 
              if (blob) {
