@@ -8,7 +8,8 @@ import {
   FileText, 
   Settings,
   LogOut,
-  Zap
+  Zap,
+  Workflow
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -21,6 +22,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView }) =
     { id: AppView.DASHBOARD, icon: LayoutDashboard, label: 'Dashboard' },
     { id: AppView.EDITOR, icon: FileEdit, label: 'Edit PDF' },
     { id: AppView.CONVERT, icon: ArrowRightLeft, label: 'Convert' },
+    { id: AppView.WORKFLOW, icon: Workflow, label: 'Workflow' },
     { id: AppView.SIGN, icon: PenTool, label: 'eSign & Track' },
     { id: AppView.FORMS, icon: FileText, label: 'Forms' },
   ];

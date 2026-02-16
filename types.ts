@@ -4,6 +4,7 @@ export enum AppView {
   CONVERT = 'CONVERT',
   SIGN = 'SIGN',
   FORMS = 'FORMS',
+  WORKFLOW = 'WORKFLOW',
   SETTINGS = 'SETTINGS'
 }
 
