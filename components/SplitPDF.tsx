@@ -14,9 +14,10 @@ import {
 import * as pdfjsLib from 'pdfjs-dist';
 import { PDFDocument } from 'pdf-lib';
 import { saveAs } from 'file-saver';
+import { WORKER_URL } from '../utils/workerConfig';
 
 // Configure PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://esm.sh/pdfjs-dist@4.0.379/build/pdf.worker.min.mjs`;
+pdfjsLib.GlobalWorkerOptions.workerSrc = WORKER_URL;
 
 interface SplitPDFProps {
   file: UploadedFile;
@@ -71,7 +72,11 @@ export const SplitPDF: React.FC<SplitPDFProps> = ({
             }
         }
 
-        const loadingTask = pdfjsLib.getDocument({ data });
+        const loadingTask = pdfjsLib.getDocument({
+            data,
+            cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/cmaps/',
+            cMapPacked: true,
+        });
         const pdf = await loadingTask.promise;
 
         const newThumbnails: PageThumbnail[] = [];

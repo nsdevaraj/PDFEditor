@@ -100,13 +100,14 @@ test.describe('Additional PDF Tools', () => {
   });
 
   // --- Simulated Tools ---
+  // Note: Some tools were moved to dedicated tests or require configuration now
   const simulatedTools = [
-    'Add Watermark',
-    'Header & Footer',
-    'Invert Colors',
-    'Background Color',
-    'Change Text Color',
-    'Add Stamps',
+    // 'Add Watermark', // Requires config now
+    // 'Header & Footer', // Requires config now
+    // 'Invert Colors', // Requires config now
+    // 'Background Color', // Requires config now
+    // 'Change Text Color', // Requires config now
+    // 'Add Stamps', // Requires config now
     'Remove Annotations',
     'Remove Blank Pages',
     'View Metadata',
