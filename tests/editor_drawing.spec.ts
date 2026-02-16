@@ -22,9 +22,8 @@ test.describe('PDF Editor Drawing Tools', () => {
     await expect(topBar).toHaveCSS('z-index', '50');
 
     // 1. Draw with Pencil
-    const pencilDropdown = page.locator('button').filter({ has: page.locator('svg.lucide-pen') }).filter({ has: page.locator('svg.lucide-chevron-down') });
-    await pencilDropdown.click();
-    await page.getByRole('button', { name: 'Pencil', exact: true }).click();
+    const penButton = page.locator('button[title="Freehand Draw"]');
+    await penButton.click();
 
     const canvas = page.locator('canvas');
     const box = await canvas.boundingBox();
@@ -42,8 +41,7 @@ test.describe('PDF Editor Drawing Tools', () => {
     await expect(paths).toHaveCount(1);
 
     // Verify cursor style for Eraser
-    await pencilDropdown.click();
-    await page.getByRole('button', { name: 'Eraser', exact: true }).click();
+    await penButton.click();
 
     // Check cursor on the page container
     // The containerRef div has the cursor style

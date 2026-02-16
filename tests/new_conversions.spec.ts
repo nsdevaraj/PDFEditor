@@ -40,7 +40,7 @@ test.describe('New PDF Conversion Tools', () => {
   test('PPT to PDF', async ({ page }) => {
     await page.getByText('PPT to PDF').click();
     const fileInput = page.locator('input[type="file"]');
-    const pptxPath = path.join(process.cwd(), 'sample.pptx');
+    const pptxPath = path.join(process.cwd(), 'sample_test.pptx');
     await fileInput.setInputFiles(pptxPath);
 
     // Expect success
