@@ -18,18 +18,20 @@ export const convertPdfToImages = async (
 
   // Configure worker
   // We use the same worker configuration as before, but only when needed
+  const { WORKER_URL } = await import('./workerConfig');
   if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-      pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-        'pdfjs-dist/build/pdf.worker.min.mjs',
-        import.meta.url
-      ).toString();
+      pdfjsLib.GlobalWorkerOptions.workerSrc = WORKER_URL;
   }
 
   const zip = new JSZip();
   const arrayBuffer = await file.arrayBuffer();
 
   // Load the PDF file
-  const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) });
+  const loadingTask = pdfjsLib.getDocument({
+      data: new Uint8Array(arrayBuffer),
+      cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/cmaps/',
+      cMapPacked: true,
+  });
   const pdf = await loadingTask.promise;
   const numPages = pdf.numPages;
 

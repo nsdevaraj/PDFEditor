@@ -206,6 +206,10 @@ export const ToolsGrid: React.FC<ToolsGridProps> = ({ onNavigate }) => {
         return;
     }
 
+    // Tools that require file input first, then configuration
+    // We let the file input click happen for these tools now
+    // (Add Stamps, Add Watermark, Header & Footer, Invert Colors, Background Color, Change Text Color, PDF to Image)
+
     // Small timeout to allow state to set before clicking input
     setTimeout(() => {
       fileInputRef.current?.click();
@@ -549,7 +553,8 @@ export const ToolsGrid: React.FC<ToolsGridProps> = ({ onNavigate }) => {
 
           for (let i = 0; i < pages.length; i++) {
               const page = pages[i];
-              page.node.delete(PDFName.of('Annots'));
+              // Set Annots to empty array instead of deleting to avoid corruption in some viewers
+              page.node.set(PDFName.of('Annots'), pdfDoc.context.obj([]));
               setProgress(10 + ((i + 1) / pages.length) * 85);
           }
 
@@ -575,39 +580,43 @@ export const ToolsGrid: React.FC<ToolsGridProps> = ({ onNavigate }) => {
       try {
           // Use pdfjs-dist to detect content
           const pdfjsLib = await import('pdfjs-dist');
+          const { WORKER_URL } = await import('../utils/workerConfig');
+
           if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-             pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-                'pdfjs-dist/build/pdf.worker.min.mjs',
-                import.meta.url
-             ).toString();
+             pdfjsLib.GlobalWorkerOptions.workerSrc = WORKER_URL;
           }
 
           const arrayBuffer = await targetFile.arrayBuffer();
-          const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
-          const pagesToKeep: number[] = [];
+          // Clone buffer for PDF.js to avoid detachment issues if shared
+          const pdfJsBuffer = arrayBuffer.slice(0);
+          const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(pdfJsBuffer) }).promise;
+          const pagesToRemove: number[] = [];
 
           for (let i = 1; i <= pdf.numPages; i++) {
               const page = await pdf.getPage(i);
               const textContent = await page.getTextContent();
               // Simple heuristic: if text items > 0, keep.
-              if (textContent.items.length > 0) {
-                  pagesToKeep.push(i - 1); // 0-based for pdf-lib
+              // If empty, mark for removal
+              if (textContent.items.length === 0) {
+                  pagesToRemove.push(i - 1); // 0-based for pdf-lib
               }
               setProgress((i / pdf.numPages) * 50);
           }
 
-          if (pagesToKeep.length === 0) {
+          if (pagesToRemove.length === pdf.numPages) {
               throw new Error("All pages are blank!");
           }
 
-          // Use pdf-lib to construct new doc
+          // Use pdf-lib to modify existing doc (safer than creating new one)
           const { PDFDocument } = await import('pdf-lib');
           const pdfDoc = await PDFDocument.load(arrayBuffer);
-          const newPdf = await PDFDocument.create();
-          const copiedPages = await newPdf.copyPages(pdfDoc, pagesToKeep);
-          copiedPages.forEach(p => newPdf.addPage(p));
 
-          const savedBytes = await newPdf.save();
+          // Remove pages in reverse order to avoid index shift
+          pagesToRemove.sort((a, b) => b - a).forEach(idx => {
+             pdfDoc.removePage(idx);
+          });
+
+          const savedBytes = await pdfDoc.save();
           const blob = new Blob([savedBytes], { type: 'application/pdf' });
           setResultBlob(blob);
           const url = URL.createObjectURL(blob);
@@ -643,7 +652,7 @@ export const ToolsGrid: React.FC<ToolsGridProps> = ({ onNavigate }) => {
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      if (activeTool?.title === "Merge PDF" && e.target.files.length > 1) {
+      if (activeTool?.title === "Merge PDF" && e.target.files.length > 0) {
           const files = Array.from(e.target.files);
           setSelectedFiles(files);
           setFileName(`${files.length} files`);
@@ -1526,7 +1535,7 @@ export const ToolsGrid: React.FC<ToolsGridProps> = ({ onNavigate }) => {
                   </div>
                 )}
 
-                {status === 'configuring' && !['Add Watermark', 'Header & Footer', 'Invert Colors', 'Background Color', 'Change Text Color'].includes(activeTool?.title) && (
+                {status === 'configuring' && !['Add Stamps', 'Add Watermark', 'Header & Footer', 'Invert Colors', 'Background Color', 'Change Text Color'].includes(activeTool?.title) && (
                   <div className="text-center py-6">
                     <h4 className="font-semibold text-slate-900 mb-4">Select Output Format</h4>
 

@@ -8,9 +8,16 @@ import type { Paragraph } from 'docx';
 
 const getPDFDocument = async (file: File) => {
   const pdfjsLib = await import('pdfjs-dist');
-  pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+  const { WORKER_URL } = await import('../utils/workerConfig');
+  if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+     pdfjsLib.GlobalWorkerOptions.workerSrc = WORKER_URL;
+  }
   const arrayBuffer = await file.arrayBuffer();
-  const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) });
+  const loadingTask = pdfjsLib.getDocument({
+    data: new Uint8Array(arrayBuffer),
+    cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/cmaps/',
+    cMapPacked: true,
+  });
   return await loadingTask.promise;
 };
 
@@ -592,8 +599,8 @@ export const convertPDFToText = async (file: File): Promise<Blob> => {
 
     for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
-        const textContent = await page.getTextContent();
-        const pageText = textContent.items.map((item: any) => item.str).join(' ');
+        const rows = await extractRowsFromPage(page);
+        const pageText = rows.map(row => row.join(' ')).join('\n');
         fullText += `Page ${i}:\n${pageText}\n\n`;
     }
 
