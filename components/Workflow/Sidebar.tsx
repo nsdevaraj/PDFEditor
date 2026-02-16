@@ -7,6 +7,7 @@ const TEMPLATES = [
   {
     id: 'merge-compress',
     title: 'Merge & Compress',
+    desc: 'Merge multiple PDFs and compress the result for smaller file size',
     nodes: [
       { id: '1', type: 'tool', position: { x: 100, y: 100 }, data: { toolId: 'merge', label: 'Merge PDF', isStart: true } },
       { id: '2', type: 'tool', position: { x: 100, y: 300 }, data: { toolId: 'compress', label: 'Compress PDF' } }
@@ -14,11 +15,253 @@ const TEMPLATES = [
     edges: [{ id: 'e1-2', source: '1', target: '2' }]
   },
   {
-    id: 'rotate-split',
-    title: 'Rotate & Split',
+    id: 'images-watermark',
+    title: 'Images to Watermarked PDF',
+    desc: 'Convert images to PDF and add a custom watermark',
+    nodes: [
+      { id: '1', type: 'tool', position: { x: 100, y: 100 }, data: { toolId: 'image-to-pdf', label: 'Images to PDF', isStart: true } },
+      { id: '2', type: 'tool', position: { x: 100, y: 300 }, data: { toolId: 'watermark', label: 'Add Watermark' } }
+    ],
+    edges: [{ id: 'e1-2', source: '1', target: '2' }]
+  },
+  {
+    id: 'pdf-compressed-img',
+    title: 'PDF to Compressed Images',
+    desc: 'Convert PDF pages to JPG images',
+    nodes: [
+      { id: '1', type: 'tool', position: { x: 100, y: 100 }, data: { toolId: 'pdf-to-image', label: 'PDF to Image', isStart: true } }
+    ],
+    edges: []
+  },
+  {
+    id: 'secure-pdf',
+    title: 'Create Secure PDF',
+    desc: 'Merge PDFs, add watermark, and encrypt with password',
+    nodes: [
+      { id: '1', type: 'tool', position: { x: 100, y: 50 }, data: { toolId: 'merge', label: 'Merge PDF', isStart: true } },
+      { id: '2', type: 'tool', position: { x: 100, y: 250 }, data: { toolId: 'watermark', label: 'Add Watermark' } },
+      { id: '3', type: 'tool', position: { x: 100, y: 450 }, data: { toolId: 'protect', label: 'Protect PDF' } }
+    ],
+    edges: [
+        { id: 'e1-2', source: '1', target: '2' },
+        { id: 'e2-3', source: '2', target: '3' }
+    ]
+  },
+  {
+    id: 'doc-prep',
+    title: 'Document Preparation',
+    desc: 'Merge PDFs, add page numbers, and add header/footer',
+    nodes: [
+      { id: '1', type: 'tool', position: { x: 100, y: 50 }, data: { toolId: 'merge', label: 'Merge PDF', isStart: true } },
+      { id: '2', type: 'tool', position: { x: 100, y: 250 }, data: { toolId: 'page-numbers', label: 'Page Numbers' } },
+      { id: '3', type: 'tool', position: { x: 100, y: 450 }, data: { toolId: 'header-footer', label: 'Header & Footer' } }
+    ],
+    edges: [
+        { id: 'e1-2', source: '1', target: '2' },
+        { id: 'e2-3', source: '2', target: '3' }
+    ]
+  },
+  {
+    id: 'web-optimize',
+    title: 'Optimize for Web',
+    desc: 'Compress and linearize PDF for fast web viewing',
+    nodes: [
+      { id: '1', type: 'tool', position: { x: 100, y: 100 }, data: { toolId: 'compress', label: 'Compress PDF', isStart: true } },
+      { id: '2', type: 'tool', position: { x: 100, y: 300 }, data: { toolId: 'linearize', label: 'Linearize PDF' } }
+    ],
+    edges: [{ id: 'e1-2', source: '1', target: '2' }]
+  },
+  {
+    id: 'split-watermark',
+    title: 'Split & Watermark',
+    desc: 'Split PDF into pages and add watermark to each',
+    nodes: [
+      { id: '1', type: 'tool', position: { x: 100, y: 100 }, data: { toolId: 'split', label: 'Split PDF', isStart: true } },
+      { id: '2', type: 'tool', position: { x: 100, y: 300 }, data: { toolId: 'watermark', label: 'Add Watermark' } }
+    ],
+    edges: [{ id: 'e1-2', source: '1', target: '2' }]
+  },
+  {
+    id: 'office-pdf',
+    title: 'Office Files to Single PDF',
+    desc: 'Convert Word documents to PDF and merge them',
+    nodes: [
+      { id: '1', type: 'tool', position: { x: 100, y: 100 }, data: { toolId: 'word-to-pdf', label: 'Word to PDF', isStart: true } },
+      { id: '2', type: 'tool', position: { x: 100, y: 300 }, data: { toolId: 'merge', label: 'Merge Result' } } // Assuming merge can take one input in workflow logic or user adds more
+    ],
+    edges: [{ id: 'e1-2', source: '1', target: '2' }]
+  },
+  {
+    id: 'rotate-page-nums',
+    title: 'Rotate & Add Page Numbers',
+    desc: 'Rotate PDF pages and add page numbers',
     nodes: [
       { id: '1', type: 'tool', position: { x: 100, y: 100 }, data: { toolId: 'rotate', label: 'Rotate PDF', isStart: true } },
-      { id: '2', type: 'tool', position: { x: 100, y: 300 }, data: { toolId: 'split', label: 'Split PDF' } }
+      { id: '2', type: 'tool', position: { x: 100, y: 300 }, data: { toolId: 'page-numbers', label: 'Page Numbers' } }
+    ],
+    edges: [{ id: 'e1-2', source: '1', target: '2' }]
+  },
+  {
+    id: 'print-ready',
+    title: 'Print Ready Document',
+    desc: 'Prepare PDF for printing with page numbers and flatten',
+    nodes: [
+      { id: '1', type: 'tool', position: { x: 100, y: 100 }, data: { toolId: 'page-numbers', label: 'Page Numbers', isStart: true } },
+      { id: '2', type: 'tool', position: { x: 100, y: 300 }, data: { toolId: 'flatten', label: 'Flatten PDF' } }
+    ],
+    edges: [{ id: 'e1-2', source: '1', target: '2' }]
+  },
+  {
+    id: 'grayscale-compress',
+    title: 'Grayscale & Compress',
+    desc: 'Convert to grayscale and compress for smaller size',
+    nodes: [
+      { id: '1', type: 'tool', position: { x: 100, y: 100 }, data: { toolId: 'grayscale', label: 'Grayscale', isStart: true } },
+      { id: '2', type: 'tool', position: { x: 100, y: 300 }, data: { toolId: 'compress', label: 'Compress PDF' } }
+    ],
+    edges: [{ id: 'e1-2', source: '1', target: '2' }]
+  },
+  {
+    id: 'extract-merge',
+    title: 'Extract & Merge Pages',
+    desc: 'Extract specific pages and merge them into a new document',
+    nodes: [
+      { id: '1', type: 'tool', position: { x: 100, y: 100 }, data: { toolId: 'split', label: 'Extract Pages', isStart: true } },
+      { id: '2', type: 'tool', position: { x: 100, y: 300 }, data: { toolId: 'merge', label: 'Merge PDF' } }
+    ],
+    edges: [{ id: 'e1-2', source: '1', target: '2' }]
+  },
+  {
+    id: 'confidential',
+    title: 'Confidential Document',
+    desc: 'Add confidential watermark and encrypt PDF',
+    nodes: [
+      { id: '1', type: 'tool', position: { x: 100, y: 100 }, data: { toolId: 'watermark', label: 'Confidential Watermark', isStart: true } },
+      { id: '2', type: 'tool', position: { x: 100, y: 300 }, data: { toolId: 'protect', label: 'Encrypt PDF' } }
+    ],
+    edges: [{ id: 'e1-2', source: '1', target: '2' }]
+  },
+  {
+    id: 'pdf-editable',
+    title: 'PDF to Editable Document',
+    desc: 'Convert PDF to Word document for editing',
+    nodes: [
+      { id: '1', type: 'tool', position: { x: 100, y: 100 }, data: { toolId: 'pdf-to-word', label: 'PDF to Word', isStart: true } }
+    ],
+    edges: []
+  },
+  {
+    id: 'full-opt',
+    title: 'Full Document Optimization',
+    desc: 'Compress, flatten, and linearize for optimal performance',
+    nodes: [
+      { id: '1', type: 'tool', position: { x: 100, y: 50 }, data: { toolId: 'compress', label: 'Compress PDF', isStart: true } },
+      { id: '2', type: 'tool', position: { x: 100, y: 250 }, data: { toolId: 'flatten', label: 'Flatten PDF' } },
+      { id: '3', type: 'tool', position: { x: 100, y: 450 }, data: { toolId: 'linearize', label: 'Linearize PDF' } }
+    ],
+    edges: [
+        { id: 'e1-2', source: '1', target: '2' },
+        { id: 'e2-3', source: '2', target: '3' }
+    ]
+  },
+  {
+    id: 'pdf-ppt',
+    title: 'PDF to PowerPoint',
+    desc: 'Convert PDF to editable PowerPoint presentation',
+    nodes: [
+      { id: '1', type: 'tool', position: { x: 100, y: 100 }, data: { toolId: 'pdf-to-ppt', label: 'PDF to PPT', isStart: true } }
+    ],
+    edges: []
+  },
+  {
+    id: 'unlock-edit',
+    title: 'Unlock & Edit PDF',
+    desc: 'Decrypt protected PDF for editing',
+    nodes: [
+      { id: '1', type: 'tool', position: { x: 100, y: 100 }, data: { toolId: 'unlock', label: 'Unlock PDF', isStart: true } }
+    ],
+    edges: []
+  },
+  {
+    id: 'crop-resize',
+    title: 'Crop & Resize Pages',
+    desc: 'Crop PDF pages and adjust page dimensions',
+    nodes: [
+      { id: '1', type: 'tool', position: { x: 100, y: 100 }, data: { toolId: 'resize', label: 'Crop PDF', isStart: true } }, // Assuming crop is mapped to resize or similar
+      { id: '2', type: 'tool', position: { x: 100, y: 300 }, data: { toolId: 'resize', label: 'Resize Pages' } }
+    ],
+    edges: [{ id: 'e1-2', source: '1', target: '2' }]
+  },
+  {
+    id: 'epub-pdf',
+    title: 'eBook to PDF',
+    desc: 'Convert EPUB eBooks to PDF format',
+    nodes: [
+      { id: '1', type: 'tool', position: { x: 100, y: 100 }, data: { toolId: 'epub-to-pdf', label: 'EPUB to PDF', isStart: true } },
+      { id: '2', type: 'tool', position: { x: 100, y: 300 }, data: { toolId: 'page-numbers', label: 'Add Page Numbers' } }
+    ],
+    edges: [{ id: 'e1-2', source: '1', target: '2' }]
+  },
+  {
+    id: 'batch-watermark',
+    title: 'Batch Watermark',
+    desc: 'Add watermark to multiple PDF files at once',
+    nodes: [
+      { id: '1', type: 'tool', position: { x: 100, y: 100 }, data: { toolId: 'watermark', label: 'Batch Watermark', isStart: true } }
+    ],
+    edges: []
+  },
+  {
+    id: 'archive-prep',
+    title: 'Archive Preparation',
+    desc: 'Remove metadata, flatten, and compress for long-term storage',
+    nodes: [
+      { id: '1', type: 'tool', position: { x: 100, y: 50 }, data: { toolId: 'metadata', label: 'Remove Metadata', isStart: true } },
+      { id: '2', type: 'tool', position: { x: 100, y: 250 }, data: { toolId: 'flatten', label: 'Flatten PDF' } },
+      { id: '3', type: 'tool', position: { x: 100, y: 450 }, data: { toolId: 'compress', label: 'Compress PDF' } }
+    ],
+    edges: [
+        { id: 'e1-2', source: '1', target: '2' },
+        { id: 'e2-3', source: '2', target: '3' }
+    ]
+  },
+  {
+    id: 'report-assembly',
+    title: 'Report Assembly',
+    desc: 'Merge documents, add page numbers, header/footer and table of contents',
+    nodes: [
+      { id: '1', type: 'tool', position: { x: 100, y: 50 }, data: { toolId: 'merge', label: 'Merge Docs', isStart: true } },
+      { id: '2', type: 'tool', position: { x: 100, y: 250 }, data: { toolId: 'page-numbers', label: 'Page Numbers' } },
+      { id: '3', type: 'tool', position: { x: 100, y: 450 }, data: { toolId: 'header-footer', label: 'Header & Footer' } },
+      { id: '4', type: 'tool', position: { x: 100, y: 650 }, data: { toolId: 'organize', label: 'Organize/TOC' } }
+    ],
+    edges: [
+        { id: 'e1-2', source: '1', target: '2' },
+        { id: 'e2-3', source: '2', target: '3' },
+        { id: 'e3-4', source: '3', target: '4' }
+    ]
+  },
+  {
+    id: 'invoice-proc',
+    title: 'Invoice Processing',
+    desc: 'Extract pages, add watermark, and compress for email',
+    nodes: [
+      { id: '1', type: 'tool', position: { x: 100, y: 50 }, data: { toolId: 'split', label: 'Extract Pages', isStart: true } },
+      { id: '2', type: 'tool', position: { x: 100, y: 250 }, data: { toolId: 'watermark', label: 'Add Watermark' } },
+      { id: '3', type: 'tool', position: { x: 100, y: 450 }, data: { toolId: 'compress', label: 'Compress PDF' } }
+    ],
+    edges: [
+        { id: 'e1-2', source: '1', target: '2' },
+        { id: 'e2-3', source: '2', target: '3' }
+    ]
+  },
+  {
+    id: 'photo-album',
+    title: 'Photo Album Creator',
+    desc: 'Convert images to PDF with page numbers',
+    nodes: [
+      { id: '1', type: 'tool', position: { x: 100, y: 100 }, data: { toolId: 'image-to-pdf', label: 'Images to PDF', isStart: true } },
+      { id: '2', type: 'tool', position: { x: 100, y: 300 }, data: { toolId: 'page-numbers', label: 'Page Numbers' } }
     ],
     edges: [{ id: 'e1-2', source: '1', target: '2' }]
   }
@@ -109,6 +352,7 @@ export const Sidebar = ({ onLoadTemplate }: { onLoadTemplate?: (nodes: any[], ed
                             <span className="font-medium text-slate-800">{template.title}</span>
                             <LayoutTemplate className="w-4 h-4 text-slate-400 group-hover:text-blue-500" />
                         </div>
+                        <p className="text-[10px] text-slate-500 mb-2">{template.desc}</p>
                         <div className="flex items-center space-x-1">
                             {template.nodes.map((n, i) => (
                                 <React.Fragment key={n.id}>
