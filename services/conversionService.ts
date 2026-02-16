@@ -444,20 +444,53 @@ export const convertPPTToPDF = async (file: File): Promise<Blob> => {
 export const convertImageToPDF = async (file: File): Promise<Blob> => {
   const { jsPDF } = await import('jspdf');
 
-  // Optimization: Use arrayBuffer + createImageBitmap to avoid Base64 overhead (readAsDataURL)
-  // and synchronous Image parsing. This reduces main thread blocking and memory usage.
   const arrayBuffer = await file.arrayBuffer();
   const uint8Array = new Uint8Array(arrayBuffer);
 
+  // Special handling for TIFF using UTIF
+  if (file.type === 'image/tiff' || file.name.toLowerCase().endsWith('.tiff') || file.name.toLowerCase().endsWith('.tif')) {
+      const { default: UTIF } = await import('utif');
+      const ifds = UTIF.decode(arrayBuffer);
+      if (ifds.length > 0) {
+          UTIF.decodeImage(arrayBuffer, ifds[0]);
+          const rgba = UTIF.toRGBA8(ifds[0]);
+          const width = ifds[0].width;
+          const height = ifds[0].height;
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) throw new Error("Could not create canvas context");
+
+          const imageData = new ImageData(new Uint8ClampedArray(rgba), width, height);
+          ctx.putImageData(imageData, 0, 0);
+
+          const pdf = new jsPDF({
+              orientation: width > height ? 'l' : 'p',
+              unit: 'pt',
+              format: [width, height]
+          });
+
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+          pdf.addImage(dataUrl, 'JPEG', 0, 0, width, height);
+
+          return pdf.output('blob');
+      }
+  }
+
   // Create ImageBitmap to get dimensions asynchronously without DOM overhead
-  // Note: createImageBitmap is widely supported in modern browsers
-  const bitmap = await createImageBitmap(file);
+  let bitmap: ImageBitmap;
+  try {
+      bitmap = await createImageBitmap(file);
+  } catch (e) {
+      // Fallback for unsupported formats
+      throw new Error(`Unsupported image format or corrupt file: ${file.type}`);
+  }
 
   const width = bitmap.width;
   const height = bitmap.height;
 
-  // Determine format from file type
-  // Default to JPEG if unknown, but jsPDF supports others if specified
   let format = 'JPEG';
   if (file.type === 'image/png') {
       format = 'PNG';
@@ -473,13 +506,110 @@ export const convertImageToPDF = async (file: File): Promise<Blob> => {
       format: [width, height]
   });
 
-  // Pass Uint8Array directly to avoid string allocation
-  pdf.addImage(uint8Array, format, 0, 0, width, height);
+  try {
+      // Pass Uint8Array directly to avoid string allocation where possible
+      if (format === 'BMP') {
+         // jsPDF might not support BMP via uint8array directly in all versions, fallback to canvas
+         throw new Error("BMP fallback");
+      }
+      pdf.addImage(uint8Array, format, 0, 0, width, height);
+  } catch(e) {
+      // Fallback to canvas
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+          ctx.drawImage(bitmap, 0, 0);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+          pdf.addImage(dataUrl, 'JPEG', 0, 0, width, height);
+      }
+  }
 
-  // Close bitmap to release memory
   bitmap.close();
 
   return pdf.output('blob');
+};
+
+export const convertTextToPDF = async (file: File): Promise<Blob> => {
+    const { jsPDF } = await import('jspdf');
+    const text = await file.text();
+    const pdf = new jsPDF();
+
+    pdf.setFontSize(12);
+    const splitText = pdf.splitTextToSize(text, 550);
+
+    let y = 20;
+    const lineHeight = 14;
+    const pageHeight = pdf.internal.pageSize.height;
+
+    for (let i = 0; i < splitText.length; i++) {
+        if (y + lineHeight > pageHeight - 20) {
+            pdf.addPage();
+            y = 20;
+        }
+        pdf.text(splitText[i], 20, y);
+        y += lineHeight;
+    }
+
+    return pdf.output('blob');
+};
+
+export const convertMarkdownToPDF = async (file: File): Promise<Blob> => {
+    const text = await file.text();
+
+    // Simple Markdown parser
+    let html = text
+        .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+        .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+        .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+        .replace(/\*\*(.*)\*\*/gim, '<b>$1</b>')
+        .replace(/\*(.*)\*/gim, '<i>$1</i>')
+        .replace(/`([^`]+)`/gim, '<code>$1</code>')
+        .replace(/\n/gim, '<br>');
+
+    // Wrap in container
+    html = `<div style="font-family: sans-serif; line-height: 1.5;">${html}</div>`;
+
+    return convertHTMLToPDF(html);
+};
+
+export const convertPDFToText = async (file: File): Promise<Blob> => {
+    const pdf = await getPDFDocument(file);
+    let fullText = '';
+
+    for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items.map((item: any) => item.str).join(' ');
+        fullText += `Page ${i}:\n${pageText}\n\n`;
+    }
+
+    return new Blob([fullText], { type: 'text/plain' });
+};
+
+export const convertPDFToJSON = async (file: File): Promise<Blob> => {
+    const pdf = await getPDFDocument(file);
+    const data: any = {
+        pageCount: pdf.numPages,
+        info: await (pdf as any).getMetadata(),
+        pages: []
+    };
+
+    for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        const rows = await extractRowsFromPage(page);
+
+        data.pages.push({
+            pageNumber: i,
+            text: textContent.items.map((item: any) => item.str).join(' '),
+            rows: rows
+        });
+    }
+
+    const jsonStr = JSON.stringify(data, null, 2);
+    return new Blob([jsonStr], { type: 'application/json' });
 };
 
 export const convertHTMLToPDF = async (content: string, isUrl: boolean = false): Promise<Blob> => {
