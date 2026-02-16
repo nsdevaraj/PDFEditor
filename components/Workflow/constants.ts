@@ -17,11 +17,17 @@ import {
   Globe,
   Layers,
   Camera,
-  Hash
+  Hash,
+  Stamp,
+  Heading,
+  Zap,
+  Palette,
+  Printer,
+  BookOpen
 } from 'lucide-react';
 import { WorkflowToolId } from '../../services/workflowActions';
 
-export const TOOL_DEFINITIONS: Record<WorkflowToolId, { title: string; icon: any; color: string; bg: string }> = {
+export const TOOL_DEFINITIONS: Record<string, { title: string; icon: any; color: string; bg: string }> = {
   'merge': { title: "Merge PDF", icon: Merge, color: "text-red-600", bg: "bg-red-100" },
   'split': { title: "Split / Extract", icon: Split, color: "text-cyan-600", bg: "bg-cyan-100" },
   'rotate': { title: "Rotate PDF", icon: RotateCw, color: "text-blue-600", bg: "bg-blue-100" },
@@ -41,6 +47,16 @@ export const TOOL_DEFINITIONS: Record<WorkflowToolId, { title: string; icon: any
   'ppt-to-pdf': { title: "PPT to PDF", icon: FileOutput, color: "text-orange-600", bg: "bg-orange-100" },
   'image-to-pdf': { title: "Image to PDF", icon: Image, color: "text-purple-600", bg: "bg-purple-100" },
   'html-to-pdf': { title: "HTML to PDF", icon: Globe, color: "text-pink-600", bg: "bg-pink-100" },
+  // Placeholders for Templates
+  'watermark': { title: "Watermark", icon: Stamp, color: "text-indigo-500", bg: "bg-indigo-100" },
+  'page-numbers': { title: "Page Numbers", icon: Hash, color: "text-green-600", bg: "bg-green-100" },
+  'header-footer': { title: "Header & Footer", icon: Heading, color: "text-gray-600", bg: "bg-gray-100" },
+  'linearize': { title: "Linearize (Web)", icon: Zap, color: "text-amber-500", bg: "bg-amber-100" },
+  'grayscale': { title: "Grayscale", icon: Palette, color: "text-slate-600", bg: "bg-slate-200" },
+  'print-ready': { title: "Print Ready", icon: Printer, color: "text-cyan-600", bg: "bg-cyan-100" },
+  'epub-to-pdf': { title: "EPUB to PDF", icon: BookOpen, color: "text-orange-500", bg: "bg-orange-100" },
+  'resize': { title: "Resize Pages", icon: Crop, color: "text-blue-500", bg: "bg-blue-100" },
+  'metadata': { title: "Edit Metadata", icon: FileText, color: "text-slate-500", bg: "bg-slate-100" },
 };
 
 export const INITIAL_NODES = [
