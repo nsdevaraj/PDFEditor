@@ -336,11 +336,26 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
       e.target.value = ''; // Reset input
   };
 
+
+  // --- Helpers ---
+  const getCoordinates = (e: React.MouseEvent | React.TouchEvent) => {
+    if ('touches' in e) {
+      if (e.touches.length > 0) {
+        return { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY, target: e.target };
+      } else if (e.changedTouches.length > 0) {
+        return { clientX: e.changedTouches[0].clientX, clientY: e.changedTouches[0].clientY, target: e.target };
+      }
+    }
+    return { clientX: (e as React.MouseEvent).clientX, clientY: (e as React.MouseEvent).clientY, target: e.target };
+  };
+
   // --- Mouse Handlers ---
 
-  const handleMouseDown = (e: React.MouseEvent) => {
+
+  const handleMouseDown = (e: React.MouseEvent | React.TouchEvent) => {
+    const { clientX, clientY, target } = getCoordinates(e);
     // If clicking on empty space, deselect
-    if (e.target === containerRef.current || e.target === canvasRef.current) {
+    if (target === containerRef.current || target === canvasRef.current) {
          if (interactionMode !== 'draw' && interactionMode !== 'eraser') {
             setSelectedId(null);
          }
@@ -349,19 +364,20 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
     if (interactionMode === 'draw' && containerRef.current) {
         setIsDrawing(true);
         const containerRect = containerRef.current.getBoundingClientRect();
-        const startX = (e.clientX - containerRect.left) / scale;
-        const startY = (e.clientY - containerRect.top) / scale;
+        const startX = (clientX - containerRect.left) / scale;
+        const startY = (clientY - containerRect.top) / scale;
         setCurrentPath([{ x: startX, y: startY }]);
     }
   };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
+  const handleMouseMove = (e: React.MouseEvent | React.TouchEvent) => {
     if (!containerRef.current) return;
+    const { clientX, clientY } = getCoordinates(e);
     const containerRect = containerRef.current.getBoundingClientRect();
 
     if (resizeState && resizeState.active) {
-        const currentX = (e.clientX - containerRect.left) / scale;
-        const currentY = (e.clientY - containerRect.top) / scale;
+        const currentX = (clientX - containerRect.left) / scale;
+        const currentY = (clientY - containerRect.top) / scale;
         
         const deltaX = currentX - (resizeState.startX - containerRect.left) / scale;
         const deltaY = currentY - (resizeState.startY - containerRect.top) / scale;
@@ -391,12 +407,12 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
     }
 
     if (isDrawing) {
-        const x = (e.clientX - containerRect.left) / scale;
-        const y = (e.clientY - containerRect.top) / scale;
+        const x = (clientX - containerRect.left) / scale;
+        const y = (clientY - containerRect.top) / scale;
         setCurrentPath(prev => [...prev, { x, y }]);
     } else if (draggingId) {
-        const newX = (e.clientX - containerRect.left - dragOffset.x) / scale;
-        const newY = (e.clientY - containerRect.top - dragOffset.y) / scale;
+        const newX = (clientX - containerRect.left - dragOffset.x) / scale;
+        const newY = (clientY - containerRect.top - dragOffset.y) / scale;
         setElements(prev => prev.map(el => 
           el.id === draggingId ? { ...el, x: newX, y: newY } : el
         ));
@@ -434,7 +450,7 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
     }
   };
 
-  const handleElementMouseDown = (e: React.MouseEvent, id: string) => {
+  const handleElementMouseDown = (e: React.MouseEvent | React.TouchEvent, id: string) => {
     e.stopPropagation(); 
     
     // Eraser Mode Click Handling
@@ -448,10 +464,11 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
     setSelectedId(id);
     setDraggingId(id);
     
+    const { clientX, clientY } = getCoordinates(e);
     const elRect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     setDragOffset({
-      x: e.clientX - elRect.left,
-      y: e.clientY - elRect.top
+      x: clientX - elRect.left,
+      y: clientY - elRect.top
     });
   };
 
@@ -462,7 +479,7 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
       }
   };
 
-  const handleResizeStart = (e: React.MouseEvent, handle: string) => {
+  const handleResizeStart = (e: React.MouseEvent | React.TouchEvent, handle: string) => {
       e.stopPropagation();
       const el = elements.find(e => e.id === selectedId);
       if (!el) return;
@@ -470,8 +487,8 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
       setResizeState({
           active: true,
           handle,
-          startX: e.clientX,
-          startY: e.clientY,
+          startX: getCoordinates(e).clientX,
+          startY: getCoordinates(e).clientY,
           initialX: el.x,
           initialY: el.y,
           initialWidth: el.width || 100,
@@ -842,6 +859,10 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
              onMouseMove={handleMouseMove}
              onMouseUp={handleMouseUp}
              onMouseLeave={handleMouseUp}
+             onTouchStart={handleMouseDown}
+             onTouchMove={handleMouseMove}
+             onTouchEnd={handleMouseUp}
+             onTouchCancel={handleMouseUp}
         >
             <div 
                 ref={containerRef}
@@ -850,7 +871,8 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
                     minHeight: '400px',
                     minWidth: '300px',
                     cursor: interactionMode === 'hand' ? 'grab' : interactionMode === 'draw' ? 'crosshair' : interactionMode === 'eraser' ? 'crosshair' : 'default',
-                    userSelect: 'none'
+                    userSelect: 'none',
+                    touchAction: interactionMode !== 'hand' ? 'none' : 'auto'
                 }}
             >
                 {isRendering && !pdfDoc && (
@@ -874,18 +896,20 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
                             top: el.y * scale,
                             transform: `scale(${scale})`, 
                             transformOrigin: 'top left',
-                            pointerEvents: interactionMode === 'draw' ? 'none' : 'auto'
+                            pointerEvents: interactionMode === 'draw' ? 'none' : 'auto',
+                            touchAction: interactionMode !== 'hand' ? 'none' : 'auto'
                         }}
                         onMouseDown={(e) => handleElementMouseDown(e, el.id)}
                         onMouseEnter={(e) => handleElementMouseEnter(e, el.id)}
+                        onTouchStart={(e) => handleElementMouseDown(e, el.id)}
                    >
                        {/* Resize Handles - Only for specific types when selected */}
                        {isSelected && ['rectangle', 'circle', 'image', 'highlight'].includes(el.type) && (
                            <>
-                               <div className="absolute -top-1 -left-1 w-2.5 h-2.5 bg-blue-600 rounded-full cursor-nw-resize z-50" onMouseDown={(e) => handleResizeStart(e, 'nw')} />
-                               <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-blue-600 rounded-full cursor-ne-resize z-50" onMouseDown={(e) => handleResizeStart(e, 'ne')} />
-                               <div className="absolute -bottom-1 -left-1 w-2.5 h-2.5 bg-blue-600 rounded-full cursor-sw-resize z-50" onMouseDown={(e) => handleResizeStart(e, 'sw')} />
-                               <div className="absolute -bottom-1 -right-1 w-2.5 h-2.5 bg-blue-600 rounded-full cursor-se-resize z-50" onMouseDown={(e) => handleResizeStart(e, 'se')} />
+                               <div className="absolute -top-1 -left-1 w-2.5 h-2.5 bg-blue-600 rounded-full cursor-nw-resize z-50" onMouseDown={(e) => handleResizeStart(e, 'nw')} onTouchStart={(e) => handleResizeStart(e, 'nw')} />
+                               <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-blue-600 rounded-full cursor-ne-resize z-50" onMouseDown={(e) => handleResizeStart(e, 'ne')} onTouchStart={(e) => handleResizeStart(e, 'ne')} />
+                               <div className="absolute -bottom-1 -left-1 w-2.5 h-2.5 bg-blue-600 rounded-full cursor-sw-resize z-50" onMouseDown={(e) => handleResizeStart(e, 'sw')} onTouchStart={(e) => handleResizeStart(e, 'sw')} />
+                               <div className="absolute -bottom-1 -right-1 w-2.5 h-2.5 bg-blue-600 rounded-full cursor-se-resize z-50" onMouseDown={(e) => handleResizeStart(e, 'se')} onTouchStart={(e) => handleResizeStart(e, 'se')} />
                            </>
                        )}
 
