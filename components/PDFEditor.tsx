@@ -505,18 +505,254 @@ export const PDFEditor: React.FC<PDFEditorProps> = ({ file, onClose }) => {
     setElements(prev => prev.map(el => el.id === id ? { ...el, content: newContent } : el));
   };
 
-  const handleExport = (format: string) => {
-      setShowExportMenu(false);
-      const content = `Simulated ${format} export for ${file.name}`;
-      const blob = new Blob([content], { type: 'text/plain' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${file.name.replace('.pdf', '')}.${format}`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+
+  const generateModifiedPDF = async () => {
+    try {
+      const { PDFDocument, rgb, degrees, StandardFonts } = await import('pdf-lib');
+      let pdfDoc;
+
+      if (file.originalFile) {
+        const buffer = await file.originalFile.arrayBuffer();
+        pdfDoc = await PDFDocument.load(buffer);
+      } else if (file.content) {
+        pdfDoc = await PDFDocument.load(file.content);
+      } else {
+        throw new Error("No file content available for export.");
+      }
+
+      const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+      const italicFont = await pdfDoc.embedFont(StandardFonts.TimesRomanItalic);
+      const pages = pdfDoc.getPages();
+
+      // Ensure we only process elements on existing pages
+      for (const el of elements) {
+        if (el.page < 1 || el.page > pages.length) continue;
+        const page = pages[el.page - 1];
+        const { width, height } = page.getSize();
+
+        // Helper to convert hex to rgb
+        const hexToRgb = (hex) => {
+          if (!hex) return rgb(0, 0, 0);
+          hex = hex.replace(/^#/, '');
+          if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+          const bigint = parseInt(hex, 16);
+          const r = (bigint >> 16) & 255;
+          const g = (bigint >> 8) & 255;
+          const b = bigint & 255;
+          return rgb(r / 255, g / 255, b / 255);
+        };
+
+        const color = hexToRgb(el.strokeColor);
+        // Map from viewport coordinates back to PDF coordinates
+        // The PDF coordinate system has (0,0) at the bottom-left
+        // Our UI coordinates have (0,0) at the top-left
+        const x = el.x;
+        const y = height - el.y; // Convert Y coordinate
+
+        if (el.type === 'text' && el.content) {
+          page.drawText(el.content, {
+            x: x,
+            y: y - 12, // adjust baseline
+            size: 16, // Match text-base approx
+            font: font,
+            color: color,
+          });
+        } else if (el.type === 'signature' && el.content) {
+           page.drawText(el.content, {
+            x: x,
+            y: y - 24, // adjust baseline for larger text
+            size: 36, // Match text-4xl approx
+            font: italicFont,
+            color: color,
+          });
+        } else if (el.type === 'rectangle' && el.width && el.height) {
+          page.drawRectangle({
+            x: x,
+            y: y - el.height,
+            width: el.width,
+            height: el.height,
+            borderColor: color,
+            borderWidth: 2,
+          });
+        } else if (el.type === 'circle' && el.width && el.height) {
+           // drawEllipse takes center coordinates
+           page.drawEllipse({
+            x: x + el.width / 2,
+            y: y - el.height / 2,
+            xScale: el.width / 2,
+            yScale: el.height / 2,
+            borderColor: color,
+            borderWidth: 2,
+          });
+        } else if (el.type === 'line' && el.width) {
+           page.drawLine({
+             start: { x: x, y: y },
+             end: { x: x + el.width, y: y },
+             color: color,
+             thickness: 3,
+           });
+        } else if (el.type === 'arrow' && el.width) {
+             page.drawLine({
+             start: { x: x, y: y },
+             end: { x: x + el.width, y: y },
+             color: color,
+             thickness: 2,
+           });
+           // Draw simple arrow head
+           page.drawLine({
+             start: { x: x + el.width, y: y },
+             end: { x: x + el.width - 5, y: y + 5 },
+             color: color,
+             thickness: 2,
+           });
+           page.drawLine({
+             start: { x: x + el.width, y: y },
+             end: { x: x + el.width - 5, y: y - 5 },
+             color: color,
+             thickness: 2,
+           });
+        } else if (el.type === 'highlight' && el.width && el.height) {
+            page.drawRectangle({
+                x: x,
+                y: y - el.height,
+                width: el.width,
+                height: el.height,
+                color: color,
+                opacity: el.opacity || 0.4,
+            });
+        } else if (el.type === 'underline' && el.width) {
+             page.drawLine({
+                 start: { x: x, y: y - (el.height || 20) }, // Approximate bottom of text
+                 end: { x: x + el.width, y: y - (el.height || 20) },
+                 color: color,
+                 thickness: 2,
+             });
+        } else if (el.type === 'strike' && el.width) {
+             page.drawLine({
+                 start: { x: x, y: y - (el.height || 20) / 2 }, // Approximate middle
+                 end: { x: x + el.width, y: y - (el.height || 20) / 2 },
+                 color: color,
+                 thickness: 2,
+             });
+        } else if (el.type === 'draw' && el.pathData && el.pathData.length > 1) {
+            for (let i = 1; i < el.pathData.length; i++) {
+                const prev = el.pathData[i - 1];
+                const curr = el.pathData[i];
+                page.drawLine({
+                    start: { x: prev.x, y: height - prev.y },
+                    end: { x: curr.x, y: height - curr.y },
+                    color: color,
+                    thickness: el.strokeWidth || 2,
+                    opacity: el.opacity || 1
+                });
+            }
+        } else if (el.type === 'image' && el.dataUrl && el.width && el.height) {
+            try {
+                let embeddedImage;
+                if (el.dataUrl.startsWith('data:image/jpeg') || el.dataUrl.startsWith('data:image/jpg')) {
+                     embeddedImage = await pdfDoc.embedJpg(el.dataUrl);
+                } else if (el.dataUrl.startsWith('data:image/png')) {
+                     embeddedImage = await pdfDoc.embedPng(el.dataUrl);
+                }
+
+                if (embeddedImage) {
+                    page.drawImage(embeddedImage, {
+                        x: x,
+                        y: y - el.height,
+                        width: el.width,
+                        height: el.height,
+                    });
+                }
+            } catch (e) {
+                console.error("Failed to embed image:", e);
+            }
+        } else if (el.type === 'check') {
+            // Draw a simple checkmark
+            page.drawLine({
+                start: { x: x, y: y - 10 },
+                end: { x: x + 10, y: y - 20 },
+                color: color,
+                thickness: 3,
+            });
+            page.drawLine({
+                start: { x: x + 10, y: y - 20 },
+                end: { x: x + 30, y: y },
+                color: color,
+                thickness: 3,
+            });
+        } else if (el.type === 'cross') {
+            // Draw a simple cross
+            page.drawLine({
+                start: { x: x, y: y },
+                end: { x: x + 20, y: y - 20 },
+                color: color,
+                thickness: 3,
+            });
+            page.drawLine({
+                start: { x: x + 20, y: y },
+                end: { x: x, y: y - 20 },
+                color: color,
+                thickness: 3,
+            });
+        } else if (el.type === 'squiggle' && el.width) {
+             // Draw a simple squiggle line
+             for (let i = 0; i < el.width; i += 10) {
+                 page.drawLine({
+                     start: { x: x + i, y: y - (el.height || 20) },
+                     end: { x: x + i + 5, y: y - (el.height || 20) - 3 },
+                     color: color,
+                     thickness: 2,
+                 });
+                 if (i + 10 <= el.width) {
+                     page.drawLine({
+                         start: { x: x + i + 5, y: y - (el.height || 20) - 3 },
+                         end: { x: x + i + 10, y: y - (el.height || 20) },
+                         color: color,
+                         thickness: 2,
+                     });
+                 }
+             }
+        }
+      }
+
+      const pdfBytes = await pdfDoc.save();
+      return new Blob([pdfBytes], { type: 'application/pdf' });
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+      throw error;
+    }
   };
+
+  const handleExport = async (format: string) => {
+      setShowExportMenu(false);
+      try {
+        const modifiedPdfBlob = await generateModifiedPDF();
+
+        let blobToDownload = modifiedPdfBlob;
+        let finalExtension = 'pdf';
+
+        if (format !== 'pdf') {
+             // Fallback to conversion service if they asked for docx or something else
+             const { convertPDFToWord } = await import('../services/conversionService');
+             const tempFile = new File([modifiedPdfBlob], "temp.pdf", { type: 'application/pdf' });
+             blobToDownload = await convertPDFToWord(tempFile);
+             finalExtension = format;
+        }
+
+        const url = URL.createObjectURL(blobToDownload);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${file.name.replace('.pdf', '')}_edited.${finalExtension}`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      } catch (error) {
+          console.error("Export failed:", error);
+          alert("Failed to export the document. Please try again.");
+      }
+  };
+
 
   // Chat Logic
   const handleSendMessage = async () => {
