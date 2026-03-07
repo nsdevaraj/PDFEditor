@@ -1073,7 +1073,7 @@ export const ToolsGrid: React.FC<ToolsGridProps> = ({ onNavigate }) => {
        return;
     }
 
-    if (activeTool.title === "PDF to Image" && conversionResult) {
+    if ((activeTool.title === "PDF to Image" || ["PDF to JPG", "PDF to PNG", "PDF to WebP", "PDF to BMP", "PDF to TIFF"].includes(activeTool.title)) && conversionResult) {
        const url = URL.createObjectURL(conversionResult);
        const link = document.createElement('a');
        link.href = url;
